@@ -87,7 +87,7 @@ fun SettingsScreen(
             val cards = listOf(
                 Triple("Manage Game Folder", "Pick where your games live", onOpenManageGameFolder),
                 Triple("Manage Media Folder", "Pick where your artwork lives", onOpenManageMediaFolder),
-                Triple("App Settings", "Global Cover Art override", onOpenAppSettings),
+                Triple("App Settings", "Global override", onOpenAppSettings),
                 Triple("Controls", "Assign gamepad buttons per action", onOpenControllerConfig),
                 Triple("About", "Build info, credits, open source", onOpenAbout),
                 // #83 - own dedicated screen (not an inline toggle here) so
@@ -286,8 +286,19 @@ fun AppSettingsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Preserve Video Aspect Ratio", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "On: adds black bars if the video doesn't match your screen. Off: fills the screen.",
+                                "On: video fit to screen. Off: video stretches to screen.",
                                 style = MaterialTheme.typography.bodyMedium,
+                            )
+                            // #159 - clarifies this only has a visible effect on
+                            // screens that aren't 16:9 (the aspect ratio, not the
+                            // exact 1920x1080 resolution - a 720p or 4K 16:9 screen
+                            // sees no difference either). Worth the callout since on
+                            // a badly mismatched ratio (e.g. 4:3) the letterboxed
+                            // video can end up quite small.
+                            Text(
+                                "For non-standard 16:9 screen",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                         HypdroidSwitch(checked = preserveAspectRatioEnabled, onCheckedChange = onPreserveAspectRatioToggle)

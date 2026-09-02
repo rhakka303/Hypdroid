@@ -103,7 +103,7 @@ fun GameOptionsScreen(
                         // Global is turned off shouldn't require re-entering it.
                         if (globalCoverArtEnabled) {
                             Text(
-                                "Controlled by Settings > Global Cover Art",
+                                "Controlled by Settings > App Settings > Global Cover Art",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -119,7 +119,7 @@ fun GameOptionsScreen(
                 OutlinedCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenGameHack)) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("Game Hacks", style = MaterialTheme.typography.titleMedium)
-                        Text("Custom Game fixes", style = MaterialTheme.typography.bodySmall)
+                        Text("Custom game fixes", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -150,8 +150,16 @@ fun GameOptionsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Scorebezel Autofit", style = MaterialTheme.typography.titleMedium)
+                            // #159 - a bare On/Off is fine for Bezel/Overlay
+                            // Bezel (universal emulator terms), but this is a
+                            // Hypdroid-specific feature nobody coming from
+                            // another frontend already knows.
                             Text(
-                                if (options.scorebezelAutofit) "On" else "Off",
+                                if (options.scorebezelAutofit) {
+                                    "On: fits width of pillarbox bars."
+                                } else {
+                                    "Off: original size."
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
