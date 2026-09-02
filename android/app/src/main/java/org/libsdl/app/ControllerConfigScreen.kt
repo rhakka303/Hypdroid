@@ -37,6 +37,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import java.io.File
@@ -217,6 +220,25 @@ fun ControllerConfigScreen(
         onDispose { activity.gamepadCaptureListener = null }
     }
 
+    // #159 - one universal pill width for both the Button and Axis columns,
+    // instead of each pill auto-sizing to its own label so nothing lined up
+    // between rows. Measured from every *possible* label (not just what's
+    // currently assigned), so the width doesn't jump around as bindings
+    // change - includes both token lists and the two listening-state
+    // labels. ButtonDefaults' own horizontal content padding (24.dp each
+    // side, unset/default here) is added on top of the raw text width,
+    // since HypdroidButton doesn't override it.
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val labelStyle = MaterialTheme.typography.labelLarge
+    val pillWidth: Dp = remember(labelStyle) {
+        val candidates = VALID_BUTTON_TOKENS.map { "Button: $it" } +
+            VALID_AXIS_TOKENS.map { "Axis: $it" } +
+            listOf("Press a button...", "Move a stick...")
+        val widestPx = candidates.maxOf { textMeasurer.measure(it, labelStyle).size.width }
+        with(density) { widestPx.toDp() } + 48.dp
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -238,6 +260,7 @@ fun ControllerConfigScreen(
                 items(currentRows, key = { it.keyName }) { row ->
                     ControllerRow(
                         row = row,
+                        pillWidth = pillWidth,
                         isListeningButton = listening == (row.keyName to BindingSlot.PAD0_BUTTON),
                         isListeningAxis = listening == (row.keyName to BindingSlot.AXIS_PAD0),
                         onTapButton = { listening = row.keyName to BindingSlot.PAD0_BUTTON },
@@ -302,12 +325,13 @@ private val DIRECTIONAL_KEYS = setOf("KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGH
 // buttons - kept as a thin alias here since ControllerRow already refers
 // to "CaptureButton" by name and there's no reason to churn that.
 @Composable
-private fun CaptureButton(onClick: () -> Unit, content: @Composable () -> Unit) =
-    HypdroidButton(onClick = onClick, content = content)
+private fun CaptureButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) =
+    HypdroidButton(onClick = onClick, modifier = modifier, content = content)
 
 @Composable
 private fun ControllerRow(
     row: GamepadRow,
+    pillWidth: Dp,
     isListeningButton: Boolean,
     isListeningAxis: Boolean,
     onTapButton: () -> Unit,
@@ -319,7 +343,7 @@ private fun ControllerRow(
         Text(row.keyName, style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            CaptureButton(onClick = onTapButton) {
+            CaptureButton(onClick = onTapButton, modifier = Modifier.width(pillWidth)) {
                 Text(if (isListeningButton) "Press a button..." else "Button: ${displayToken(row.pad0Button)}")
             }
             // #84 - a fully separate action from onTapButton above, never
@@ -339,7 +363,7 @@ private fun ControllerRow(
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Choose Button from a list")
             }
             if (row.keyName in DIRECTIONAL_KEYS) {
-                CaptureButton(onClick = onTapAxis) {
+                CaptureButton(onClick = onTapAxis, modifier = Modifier.width(pillWidth)) {
                     Text(if (isListeningAxis) "Move a stick..." else "Axis: ${displayToken(row.axisPad0)}")
                 }
                 IconButton(
