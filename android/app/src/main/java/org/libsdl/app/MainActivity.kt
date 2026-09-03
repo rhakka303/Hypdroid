@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.alpha
 import com.hypdroid.mpvbridge.MpvPlayerView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
@@ -1247,9 +1248,16 @@ private fun GameCarousel(
                 // no button (and no empty-tap dead zone) for a game with no
                 // attract data.
                 if (attractClip != null && !isPlaying) {
+                    // Real bug found and fixed (2026-09-03): a plain white
+                    // icon has no guaranteed contrast against whatever's
+                    // behind it - invisible against the app's own default
+                    // white background (Background Art off), and real
+                    // background art could be any color. A dark backing
+                    // circle keeps it visible regardless.
                     IconButton(
                         onClick = { isPlaying = true },
-                        modifier = Modifier.align(Alignment.Center).size(64.dp),
+                        modifier = Modifier.align(Alignment.Center).size(64.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.PlayArrow,
