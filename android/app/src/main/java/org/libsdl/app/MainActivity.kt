@@ -253,8 +253,6 @@ private sealed class Screen {
     object About : Screen()
     object ControllerConfig : Screen()
     object TouchControls : Screen()
-    // #167 - libmpv build-spike, debug-only entry point (see #167).
-    object MpvTest : Screen()
     data class GameOptionsFor(val gameName: String) : Screen()
     // #135 - pushed from GameOptionsFor's "Game Hack" card, backs to that
     // same game's options rather than all the way to Home.
@@ -565,14 +563,8 @@ private fun HypdroidApp(context: MainActivity) {
             onOpenControllerConfig = { currentScreen = Screen.ControllerConfig },
             onOpenAbout = { currentScreen = Screen.About },
             onOpenTouchControls = { currentScreen = Screen.TouchControls },
-            onOpenMpvTest = if (BuildConfig.DEBUG) {
-                { currentScreen = Screen.MpvTest }
-            } else {
-                null
-            },
             onBack = { currentScreen = Screen.Home },
         )
-        Screen.MpvTest -> MpvTestScreen(onBack = { currentScreen = Screen.Settings })
         Screen.ManageGameFolder -> FolderManageScreen(
             title = "Game folder",
             path = gameFolderPath,

@@ -146,9 +146,6 @@ android {
     }
     buildFeatures {
         compose true
-        // #167 - BuildConfig.DEBUG gates the debug-only MPV Test entry
-        // point in Settings; not enabled by default in newer AGP.
-        buildConfig true
     }
     composeOptions {
         kotlinCompilerExtensionVersion '1.5.14'
