@@ -13,6 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.alpha
+import com.hypdroid.mpvbridge.MpvPlayerView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
@@ -37,8 +40,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,6 +53,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -82,7 +88,10 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import java.io.File
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The real app entry point (see AndroidManifest.xml - this replaced
@@ -1013,6 +1022,15 @@ private fun GameCarousel(
     // this only changes how much horizontal room the *page* claims.
     val cardWidth = if (attractModeEnabled) screenWidthDp.dp else (screenWidthDp * 0.319f).dp
 
+    // #168 - the video+frame overlay lives here, as a sibling of the pager
+    // rather than inside its per-page content (see MpvPlayerView.kt's own
+    // doc comment for the real crash this fixes: MPVLib is a native global
+    // singleton, and mounting/unmounting one per page meant a fresh
+    // create()/destroy() on every swipe - real crashes on real hardware).
+    // One persistent instance for the whole carousel; MpvPlayerView itself
+    // handles a changing focused game by issuing a fresh `loadfile`, not
+    // by tearing anything down.
+    Box(modifier = Modifier.fillMaxSize()) {
     HorizontalPager(
         state = pagerState,
         // A fixed, modest page width (rather than the default full-width
@@ -1082,18 +1100,15 @@ private fun GameCarousel(
             gameOptionsMap[game.name]?.coverArt
         }
         if (attractModeEnabled) {
-            // #163/#166 - Attract Mode positions the focused card toward
-            // the left edge (with a margin, matching the app's standard
-            // 16dp) with the attract-frame image beside it, instead of
-            // centering the card across the now-full-width page. Row's
-            // default start-packed Arrangement naturally leaves the
-            // remaining screen width as empty trailing space on the right
-            // (no extra Spacer needed) - background art shows through
-            // there, matching the earlier approved composite mockup.
-            Row(
+            // #163 - Attract Mode positions the focused card toward the
+            // left edge (with a margin, matching the app's standard 16dp)
+            // instead of centering it across the now-full-width page. The
+            // frame+video overlay is no longer built per-page here (see
+            // #168 - it's a single instance hoisted above, outside the
+            // pager entirely).
+            Box(
                 modifier = Modifier.fillMaxSize().padding(start = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(54.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
                 GameCard(
                     game = game,
@@ -1101,18 +1116,6 @@ private fun GameCarousel(
                     scale = scale,
                     onClick = { onPlay(game) },
                     onLongClick = { onOpenOptions(game) },
-                )
-                // #166 - placement only, no video yet (that's #168). Sized
-                // to 64% of the carousel's available height (80% of the
-                // card's own 80%-height rule, matching the approved
-                // composite's proportions) at the asset's real 16:9 aspect
-                // ratio - always shown while Attract Mode is on, regardless
-                // of whether this game actually has attract data (#168's
-                // job to make that conditional once real playback exists).
-                Image(
-                    painter = painterResource(id = R.drawable.attract_frame),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxHeight(0.64f).aspectRatio(1920f / 1080f),
                 )
             }
         } else {
@@ -1126,6 +1129,147 @@ private fun GameCarousel(
                 )
             }
         }
+    }
+    // #168 - single persistent video+frame overlay for the whole carousel,
+    // not one per page (see MpvPlayerView.kt's doc comment for why that
+    // crashed). Positioned via the same relative Row math the per-page
+    // card used to use (invisible same-shaped spacer + gap), so it lines
+    // up with wherever the settled page's card sits without measuring
+    // anything - both are laid out against the same container bounds
+    // using identical relative rules.
+    //
+    // Mounted for as long as Attract Mode is on, full stop - MpvPlayerView
+    // must NOT be conditionally composed on scroll state (e.g. hidden via
+    // an `if`), or it unmounts/remounts (destroy/recreate) on *every
+    // swipe*, the exact churn that caused real crashes in the first place.
+    // Instead, only visibility (alpha) reacts to an active swipe - a
+    // settled page is the only one with a stable position to align with,
+    // but the underlying player instance itself never tears down for it.
+    if (attractModeEnabled) {
+        val focusedGame = games.getOrNull(pagerState.settledPage)
+        // Real attract clip, looked up once per focused game (not on
+        // every recomposition). Null is the default/common case (no
+        // offset data, multi-file, zipped, or Daphne-native - see
+        // AttractClip.kt), not an error - the frame below still shows,
+        // just with nothing playing behind it and background visible
+        // through its center.
+        //
+        // Real bug found and fixed (2026-09-03): findAttractClip does
+        // real file I/O (reading the .singe script + framefile) - doing
+        // that synchronously inside `remember` blocked the whole Row's
+        // recomposition on the main thread, including the plain static
+        // frame image, which is why even just the border took a
+        // noticeable beat to show up when swiping. produceState moves the
+        // read to a background dispatcher so the frame renders
+        // immediately regardless of how long the file read takes; the
+        // Play button/video path just update reactively once it resolves.
+        val attractClip by produceState<AttractClipInfo?>(initialValue = null, focusedGame?.name) {
+            value = focusedGame?.let { game ->
+                withContext(Dispatchers.IO) { findAttractClip(game) }
+            }
+        }
+        // #168 - explicit Play button instead of auto-play-on-focus,
+        // simplified after real testing surfaced repeated auto-restart
+        // bugs (loop-file + repeated same-instance reloads producing an
+        // instant EOF and mpv core shutdown - see MpvPlayerView.kt). Reset
+        // whenever the focused game changes, so leaving and coming back
+        // always needs a fresh tap - no ambiguity about "should this
+        // auto-resume."
+        var isPlaying by remember(focusedGame?.name) { mutableStateOf(false) }
+        // Real bug found and fixed (2026-09-03): returning from an actual
+        // game (HypseusActivity closing, MainActivity resuming) left the
+        // UI showing a black box instead of the Play button, even though
+        // MpvPlayerView's own ON_RESUME handler now stops playback - this
+        // Compose-side isPlaying state didn't know that happened. Resets
+        // in lockstep with the player's own stop, so the Play button
+        // reliably reappears every time we come back.
+        val homeLifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(homeLifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    isPlaying = false
+                }
+            }
+            homeLifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { homeLifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+        // Real bug found and fixed (2026-09-03): once the clip reached its
+        // own natural end, the screen went black with no way to replay it
+        // - keep-open=yes was meant to freeze on the last frame, but
+        // didn't visually hold it here. Simpler fix matching the
+        // button-driven model already chosen: auto-return to the Play
+        // button once the known clip duration elapses, same alpha-hide
+        // path already used for swiping away - no black gap, and the
+        // button is always available to replay.
+        LaunchedEffect(isPlaying, attractClip) {
+            val clip = attractClip
+            if (isPlaying && clip != null) {
+                val durationMs = ((clip.endSeconds - clip.startSeconds) * 1000).toLong().coerceAtLeast(0)
+                delay(durationMs)
+                isPlaying = false
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxSize().padding(start = 16.dp)
+                .alpha(if (pagerState.isScrollInProgress) 0f else 1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(54.dp),
+        ) {
+            // Invisible - exists only so this Row's second item (the
+            // frame/video) lands in the same spot the real GameCard's
+            // width would have pushed it to. Same fillMaxHeight/aspectRatio
+            // rule GameCard itself uses.
+            Spacer(modifier = Modifier.fillMaxHeight(0.8f).aspectRatio(0.7f))
+            Box(modifier = Modifier.fillMaxHeight(0.64f).aspectRatio(1920f / 1080f)) {
+                // Video sized to the frame's full outer box, not inset to
+                // its transparent window - the frame's opaque border
+                // overlaps and crops the video's edges on purpose (settled
+                // design, see #168) - and its semi-transparent rivets
+                // blend with whatever's playing behind them, purely from
+                // alpha compositing.
+                //
+                // Real bug found and fixed (2026-09-03): MPVLib's own
+                // "stop" command halts playback but does not blank the
+                // last rendered frame on the GL surface - since this is
+                // one persistent instance (not recreated per game), the
+                // previous game's paused/last frame kept showing through
+                // for every subsequent game with no attract data of its
+                // own, confirmed on a real screenshot. Fixed at the
+                // Compose layer instead of fighting mpv's own state:
+                // alpha=0 hides the video layer outright whenever the
+                // focused game has no clip, regardless of whatever mpv
+                // still has rendered underneath.
+                MpvPlayerView(
+                    videoPath = if (isPlaying) attractClip?.videoPath else null,
+                    audioPath = if (isPlaying) attractClip?.audioPath else null,
+                    startSeconds = attractClip?.startSeconds,
+                    endSeconds = attractClip?.endSeconds,
+                    modifier = Modifier.fillMaxSize().alpha(if (isPlaying && attractClip != null) 1f else 0f),
+                )
+                Image(
+                    painter = painterResource(id = R.drawable.attract_frame),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                // #168 - only offered when there's actually a clip to play;
+                // no button (and no empty-tap dead zone) for a game with no
+                // attract data.
+                if (attractClip != null && !isPlaying) {
+                    IconButton(
+                        onClick = { isPlaying = true },
+                        modifier = Modifier.align(Alignment.Center).size(64.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = "Play attract clip",
+                            tint = Color.White,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
+    }
     }
 }
 
