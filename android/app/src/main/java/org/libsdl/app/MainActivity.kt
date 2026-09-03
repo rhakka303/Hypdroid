@@ -325,6 +325,10 @@ private fun HypdroidApp(context: MainActivity) {
     // this is just a plain CLI flag, no cross-process SharedPreferences
     // concern applies since it's resolved once at launch time.
     var preserveAspectRatioEnabled by remember { mutableStateOf(loadPreserveAspectRatioEnabled(context)) }
+    // #163 - phase 1 of the Carousel Layout brainstorm. Same
+    // synchronous-read pattern as the toggles above; read once here, passed
+    // down into GameCarousel below.
+    var attractModeEnabled by remember { mutableStateOf(loadAttractModeEnabled(context)) }
     // #83 - Touch Controls. Same synchronous-read pattern as the toggles
     // above; HypseusActivity reads these same SharedPreferences directly at
     // game-launch time rather than via an Intent extra (see TouchControls.kt).
@@ -534,6 +538,7 @@ private fun HypdroidApp(context: MainActivity) {
             globalCoverArtType = globalCoverArtType,
             backgroundArtEnabled = backgroundArtEnabled,
             defaultArtEnabled = defaultArtEnabled,
+            attractModeEnabled = attractModeEnabled,
             carouselPage = carouselPage,
             onCarouselPageChanged = { carouselPage = it },
             onChooseFolder = onChooseGameFolder,
@@ -632,6 +637,11 @@ private fun HypdroidApp(context: MainActivity) {
             onPreserveAspectRatioToggle = { enabled ->
                 savePreserveAspectRatioEnabled(context, enabled)
                 preserveAspectRatioEnabled = enabled
+            },
+            attractModeEnabled = attractModeEnabled,
+            onAttractModeToggle = { enabled ->
+                saveAttractModeEnabled(context, enabled)
+                attractModeEnabled = enabled
             },
             onBack = { currentScreen = Screen.Settings },
         )
@@ -790,6 +800,7 @@ private fun HomeScreen(
     globalCoverArtType: CoverArtType,
     backgroundArtEnabled: Boolean,
     defaultArtEnabled: Boolean,
+    attractModeEnabled: Boolean,
     carouselPage: Int,
     onCarouselPageChanged: (Int) -> Unit,
     onChooseFolder: () -> Unit,
@@ -917,6 +928,7 @@ private fun HomeScreen(
                         gameOptionsMap = gameOptionsMap,
                         globalCoverArtEnabled = globalCoverArtEnabled,
                         globalCoverArtType = globalCoverArtType,
+                        attractModeEnabled = attractModeEnabled,
                         initialPage = carouselPage,
                         onPageChanged = onCarouselPageChanged,
                         onPlay = onPlay,
@@ -944,6 +956,11 @@ private fun GameCarousel(
     gameOptionsMap: Map<String, GameOptions>,
     globalCoverArtEnabled: Boolean,
     globalCoverArtType: CoverArtType,
+    // #163 - phase 1 of the Carousel Layout brainstorm: one focused card
+    // per page, left-aligned, instead of three-up centered. No video frame
+    // yet - just proving out the resize/reposition and that d-pad
+    // navigation still works, before building anything on top of it.
+    attractModeEnabled: Boolean,
     initialPage: Int,
     onPageChanged: (Int) -> Unit,
     onPlay: (Game) -> Unit,
@@ -979,7 +996,13 @@ private fun GameCarousel(
     // Confirmed on the Retroid (~853dp wide) that this leaves real room
     // for three fully visible cards with real gaps, instead of one
     // dominant card clipping its neighbors through the middle of their art.
-    val cardWidth = (LocalConfiguration.current.screenWidthDp * 0.319f).dp
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    // #163 - Attract Mode: one full-width page per game instead of three
+    // fractional pages side by side, so neighbors don't peek in at all.
+    // The focused card's own on-screen size is still governed entirely by
+    // GameCard's height/aspect-ratio rule below (unchanged either way) -
+    // this only changes how much horizontal room the *page* claims.
+    val cardWidth = if (attractModeEnabled) screenWidthDp.dp else (screenWidthDp * 0.319f).dp
 
     HorizontalPager(
         state = pagerState,
@@ -988,8 +1011,15 @@ private fun GameCarousel(
         // landscape screen - a full-width page left the narrow portrait
         // card pinned to the page's start edge with a huge empty gap
         // before the next page, instead of a tight, centered carousel.
+        // Attract Mode intentionally goes back to a full-width page - that
+        // gap is exactly the point there, it's what leaves room for the
+        // focused card to sit left-aligned instead of centered.
         pageSize = PageSize.Fixed(cardWidth),
-        contentPadding = PaddingValues(horizontal = (LocalConfiguration.current.screenWidthDp.dp - cardWidth) / 2),
+        contentPadding = if (attractModeEnabled) {
+            PaddingValues(0.dp)
+        } else {
+            PaddingValues(horizontal = (screenWidthDp.dp - cardWidth) / 2)
+        },
         pageSpacing = 16.dp,
         modifier = Modifier
             .fillMaxSize()
@@ -1042,7 +1072,16 @@ private fun GameCarousel(
         } else {
             gameOptionsMap[game.name]?.coverArt
         }
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // #163 - Attract Mode positions the focused card toward the left
+        // edge (with a margin, matching the app's standard 16dp) instead of
+        // centering it across the now-full-width page. Off, this is
+        // unchanged from the original three-up centered layout.
+        Box(
+            modifier = Modifier.fillMaxSize().let {
+                if (attractModeEnabled) it.padding(start = 16.dp) else it
+            },
+            contentAlignment = if (attractModeEnabled) Alignment.CenterStart else Alignment.Center,
+        ) {
             GameCard(
                 game = game,
                 coverArtFile = resolveCoverArtFile(mediaFolderPath, game.name, coverArtOverride),

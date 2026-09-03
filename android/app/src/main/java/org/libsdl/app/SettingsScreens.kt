@@ -189,6 +189,8 @@ fun AppSettingsScreen(
     onDefaultArtToggle: (Boolean) -> Unit,
     preserveAspectRatioEnabled: Boolean,
     onPreserveAspectRatioToggle: (Boolean) -> Unit,
+    attractModeEnabled: Boolean,
+    onAttractModeToggle: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -305,10 +307,25 @@ fun AppSettingsScreen(
                     }
                 }
             }
-            // No second toggle to pair this with yet - an invisible spacer
-            // claims the other half of the row so this card stays the same
-            // size as its siblings above instead of stretching full-width.
-            Spacer(modifier = Modifier.weight(1f))
+            // #163 - phase 1 of the Carousel Layout brainstorm: replaces
+            // the carousel's usual three-up centered layout with one
+            // focused card per page, left-aligned. No video frame yet -
+            // that's a separate, later piece once this proves out.
+            OutlinedCard(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Attract Mode", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "On: one focused game per page, left-aligned. " +
+                                    "Off: today's three-card carousel.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        HypdroidSwitch(checked = attractModeEnabled, onCheckedChange = onAttractModeToggle)
+                    }
+                }
+            }
         }
     }
 
