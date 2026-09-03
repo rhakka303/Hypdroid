@@ -22,16 +22,22 @@ private val OFFSET_INTRO01_REGEX = Regex("""offsetIntro01\s*=\s*(\d+)""")
 private val OFFSET_INTRO01END_REGEX = Regex("""offsetIntro01end\s*=\s*(\d+)""")
 private val MOVIE_FPS_REGEX = Regex("""MovieFPS\s*=\s*([\d.]+)""")
 
+// #175 - one "offset filename" line from a framefile. offsetIntro01/end are
+// frame numbers in a *global* space shared across every entry - a single-
+// file framefile is just the special case of exactly one entry at offset 0.
+private data class FramefileEntry(val offset: Int, val filename: String)
+
 /**
  * Resolves a game's real attract clip, or null for the graceful "no video"
  * fallback case (this is the default/common case, not an error - see #168).
  *
- * Deliberately narrow scope, matching #168's settled decision to keep phase
- * 2 simple: only SINGE_SCRIPT/SINGE_ZIPPED games with exactly one entry in
- * their framefile. Multi-file framefiles, Daphne-native, and games with no
- * offsetIntro01/MovieFPS all fall through to null the same way - no
- * special-case handling needed for each, "no video" is always a safe,
- * already-designed-for outcome.
+ * Supports both single-file and multi-file framefiles (#175) - a global
+ * frame number (from offsetIntro01/end) is resolved to whichever physical
+ * file's own range it falls into, exactly matching what the game's own
+ * .singe script already declares. No filename heuristics needed anywhere
+ * in this - the offset data answers "which file" directly, by construction
+ * (see smoke/video-snaps-ideas.md for why an earlier filename-guessing
+ * idea was wrong).
  */
 fun findAttractClip(game: Game): AttractClipInfo? {
     val scriptText = when (game.category) {
@@ -57,23 +63,26 @@ fun findAttractClip(game: Game): AttractClipInfo? {
     val lines = framefile.readLines().map { it.trim() }.filter { it.isNotEmpty() }
     if (lines.isEmpty()) return null
     val prefix = lines[0]
-    // Single-file games only (#168's settled scope) - a multi-file
-    // framefile (like AlitaBattleAngel.txt) means the offsets live in a
-    // shared global frame space spanning several files, which needs real
-    // per-file range lookup - not implemented yet, falls back to null
-    // exactly like "no offset data found" (see smoke/video-snaps-ideas.md).
-    val entryLines = lines.drop(1)
-    if (entryLines.size != 1) return null
-    val parts = entryLines[0].split(Regex("""\s+"""))
-    if (parts.size < 2) return null
-    val videoFilename = parts[1]
+    val entries = parseFramefileEntries(lines.drop(1)) ?: return null
+    if (entries.isEmpty()) return null
+    val sortedEntries = entries.sortedBy { it.offset }
 
-    // #172 - framefile.parentFile (not scriptFile's) works uniformly for
-    // both categories: the framefile is always a loose file on disk
-    // regardless of whether the .singe script itself is zipped.
+    // #175 - which physical file a global frame number falls into: the
+    // entry with the largest offset that's still <= the target frame.
+    // For a single-entry (offset 0) framefile this always resolves to
+    // that one entry, same as the original single-file-only behavior.
+    fun entryFor(frame: Int) = sortedEntries.lastOrNull { it.offset <= frame }
+
+    val startEntry = entryFor(startFrame) ?: return null
+    val endEntry = entryFor(endFrame) ?: return null
+    // The attract range spanning across a file boundary isn't supported -
+    // falls back gracefully rather than trying to stitch two files
+    // together (see #175's explicitly-out-of-scope note).
+    if (startEntry != endEntry) return null
+
     val gameDir = framefile.parentFile ?: return null
     val videoDir = if (prefix == ".") gameDir else File(gameDir, prefix)
-    val videoFile = File(videoDir, videoFilename)
+    val videoFile = File(videoDir, startEntry.filename)
     if (!videoFile.isFile) return null
 
     // Matching .ogg, same basename - confirmed inconsistent even within one
@@ -82,12 +91,32 @@ fun findAttractClip(game: Game): AttractClipInfo? {
     val audioFile = File(videoDir, videoFile.nameWithoutExtension + ".ogg")
     val audioPath = if (audioFile.isFile) audioFile.path else null
 
+    // Local, in-file frame numbers - subtract the resolved entry's own
+    // starting offset from the global frame numbers. Zero-cost for the
+    // single-file case (entry offset is always 0 there).
+    val localStartFrame = startFrame - startEntry.offset
+    val localEndFrame = endFrame - startEntry.offset
+
     return AttractClipInfo(
         videoPath = videoFile.path,
         audioPath = audioPath,
-        startSeconds = startFrame / fps,
-        endSeconds = endFrame / fps,
+        startSeconds = localStartFrame / fps,
+        endSeconds = localEndFrame / fps,
     )
+}
+
+// Parses every "offset filename" line - fails the whole framefile (returns
+// null) if any single line is malformed, rather than silently skipping a
+// bad line, which could otherwise throw off every offset lookup after it.
+private fun parseFramefileEntries(entryLines: List<String>): List<FramefileEntry>? {
+    val entries = mutableListOf<FramefileEntry>()
+    for (line in entryLines) {
+        val parts = line.split(Regex("""\s+"""))
+        if (parts.size < 2) return null
+        val offset = parts[0].toIntOrNull() ?: return null
+        entries.add(FramefileEntry(offset, parts[1]))
+    }
+    return entries
 }
 
 private fun readUnzippedScript(game: Game): String? {
