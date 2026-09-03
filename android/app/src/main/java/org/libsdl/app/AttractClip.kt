@@ -1,6 +1,7 @@
 package org.libsdl.app
 
 import java.io.File
+import java.util.zip.ZipFile
 
 /**
  * #168 - resolved attract-clip info for one game: which video file, which
@@ -26,18 +27,24 @@ private val MOVIE_FPS_REGEX = Regex("""MovieFPS\s*=\s*([\d.]+)""")
  * fallback case (this is the default/common case, not an error - see #168).
  *
  * Deliberately narrow scope, matching #168's settled decision to keep phase
- * 2 simple: only SINGE_SCRIPT (unzipped) games with exactly one entry in
- * their framefile. Zipped games, Daphne-native, multi-file framefiles, and
- * games with no offsetIntro01/MovieFPS all fall through to null the same
- * way - no special-case handling needed for each, "no video" is always a
- * safe, already-designed-for outcome.
+ * 2 simple: only SINGE_SCRIPT/SINGE_ZIPPED games with exactly one entry in
+ * their framefile. Multi-file framefiles, Daphne-native, and games with no
+ * offsetIntro01/MovieFPS all fall through to null the same way - no
+ * special-case handling needed for each, "no video" is always a safe,
+ * already-designed-for outcome.
  */
 fun findAttractClip(game: Game): AttractClipInfo? {
-    if (game.category != GameCategory.SINGE_SCRIPT) return null
-
-    val scriptFile = File(game.romOrScriptPath)
-    if (!scriptFile.isFile) return null
-    val scriptText = scriptFile.readText()
+    val scriptText = when (game.category) {
+        GameCategory.SINGE_SCRIPT -> readUnzippedScript(game)
+        // #172 - the .singe script itself lives inside the zip at
+        // singe/<name>/<name>.singe (confirmed against a real zip,
+        // matches hypseus's own mandated BASEDIR = "singe" convention,
+        // not per-author variance) - everything else (framefile,
+        // video/audio files) is loose on disk exactly like the unzipped
+        // case, unchanged below.
+        GameCategory.SINGE_ZIPPED -> readZippedScript(game)
+        GameCategory.DAPHNE_NATIVE -> null
+    } ?: return null
 
     val startFrame = OFFSET_INTRO01_REGEX.find(scriptText)?.groupValues?.get(1)?.toIntOrNull() ?: return null
     val endFrame = OFFSET_INTRO01END_REGEX.find(scriptText)?.groupValues?.get(1)?.toIntOrNull() ?: return null
@@ -61,7 +68,10 @@ fun findAttractClip(game: Game): AttractClipInfo? {
     if (parts.size < 2) return null
     val videoFilename = parts[1]
 
-    val gameDir = scriptFile.parentFile ?: return null
+    // #172 - framefile.parentFile (not scriptFile's) works uniformly for
+    // both categories: the framefile is always a loose file on disk
+    // regardless of whether the .singe script itself is zipped.
+    val gameDir = framefile.parentFile ?: return null
     val videoDir = if (prefix == ".") gameDir else File(gameDir, prefix)
     val videoFile = File(videoDir, videoFilename)
     if (!videoFile.isFile) return null
@@ -78,4 +88,28 @@ fun findAttractClip(game: Game): AttractClipInfo? {
         startSeconds = startFrame / fps,
         endSeconds = endFrame / fps,
     )
+}
+
+private fun readUnzippedScript(game: Game): String? {
+    val scriptFile = File(game.romOrScriptPath)
+    if (!scriptFile.isFile) return null
+    return scriptFile.readText()
+}
+
+// #172 - opens the zip, reads just the one .singe entry's text, closes the
+// zip. No extraction to disk, no persistent handle kept open. Any failure
+// (zip unreadable, entry not found at the expected path) falls through to
+// null gracefully rather than throwing - same "no video" outcome as every
+// other unmet precondition above.
+private fun readZippedScript(game: Game): String? {
+    val zipFile = File(game.romOrScriptPath)
+    if (!zipFile.isFile) return null
+    return try {
+        ZipFile(zipFile).use { zip ->
+            val entry = zip.getEntry("singe/${game.name}/${game.name}.singe") ?: return null
+            zip.getInputStream(entry).bufferedReader().use { it.readText() }
+        }
+    } catch (e: Exception) {
+        null
+    }
 }
