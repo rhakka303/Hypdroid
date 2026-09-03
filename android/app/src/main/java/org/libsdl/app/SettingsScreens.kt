@@ -63,6 +63,7 @@ fun SettingsScreen(
     onOpenControllerConfig: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenTouchControls: () -> Unit,
+    onOpenMpvTest: (() -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -95,7 +96,15 @@ fun SettingsScreen(
                 // UI without needing to restructure this grid later.
                 Triple("Touch Controls", "On-screen overlay for gameplay", onOpenTouchControls),
             )
-            items(cards) { (title, description, onClick) ->
+            // #167 - debug-only entry point for the libmpv build-spike test
+            // screen, not part of the real Attract Mode UI (that's #168).
+            // Removed once the spike either proves out or gets scrapped.
+            val allCards = if (onOpenMpvTest != null) {
+                cards + Triple("MPV Test (debug)", "libmpv build-spike", onOpenMpvTest)
+            } else {
+                cards
+            }
+            items(allCards) { (title, description, onClick) ->
                 SettingsCard(title = title, description = description, onClick = onClick)
             }
         }

@@ -1,0 +1,48 @@
+// #167 - libmpv build-spike, deliberately its own isolated module. Does
+// NOT touch hypseus-singe's CMakeLists.txt, build graph, or libmain.so in
+// any way - see smoke/video-snaps-ideas.md and issue #167 for the full
+// reasoning. Consumes a prebuilt libmpv+FFmpeg AAR (dev.jdtech.mpv:libmpv)
+// rather than cross-compiling from source ourselves - that AAR already
+// ships libmpv.so + all the FFmpeg component libraries for arm64-v8a
+// (confirmed by inspecting it directly), so there's no NDK/FFmpeg build
+// step in this module at all, just a Compose wrapper around the existing
+// binary + its Kotlin API (dev.jdtech.mpv.MPVLib).
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace = "com.hypdroid.mpvbridge"
+    compileSdkVersion 35
+    defaultConfig {
+        minSdkVersion 30
+        targetSdkVersion 35
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    buildFeatures {
+        compose true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.14'
+    }
+}
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.runtime:runtime'
+
+    // Prebuilt libmpv + FFmpeg (all components, arm64-v8a/armeabi-v7a/
+    // x86/x86_64) plus a ready-to-use Kotlin API (MPVLib), confirmed by
+    // downloading and inspecting the real AAR before adding this - not
+    // assumed from docs alone.
+    implementation 'dev.jdtech.mpv:libmpv:0.5.1'
+}
