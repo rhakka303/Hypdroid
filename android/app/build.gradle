@@ -146,6 +146,9 @@ android {
     }
     buildFeatures {
         compose true
+        // #167 - BuildConfig.DEBUG gates the debug-only MPV Test entry
+        // point in Settings; not enabled by default in newer AGP.
+        buildConfig true
     }
     composeOptions {
         kotlinCompilerExtensionVersion '1.5.14'
@@ -201,4 +204,8 @@ dependencies {
     // SDLActivity-provided root layout - see TouchControls.kt.
     implementation 'com.github.swordfish90:radialgamepad:2.0.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
+
+    // #167 - libmpv build-spike, isolated module (see mpvbridge/build.gradle
+    // for why). Debug-only test screen wired against this in MainActivity.kt.
+    implementation project(':mpvbridge')
 }

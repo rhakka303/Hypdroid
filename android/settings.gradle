@@ -1,1 +1,3 @@
 include ':app'
+// #167 - libmpv build-spike, isolated on purpose. See mpvbridge/build.gradle.
+include ':mpvbridge'
