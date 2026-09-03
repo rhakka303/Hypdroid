@@ -39,6 +39,7 @@ dependencies {
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.foundation:foundation'
     implementation 'androidx.compose.runtime:runtime'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.1'
 
     // Prebuilt libmpv + FFmpeg (all components, arm64-v8a/armeabi-v7a/
     // x86/x86_64) plus a ready-to-use Kotlin API (MPVLib), confirmed by
