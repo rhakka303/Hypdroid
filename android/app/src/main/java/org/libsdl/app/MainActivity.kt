@@ -247,6 +247,11 @@ private sealed class Screen {
     // #135 - pushed from GameOptionsFor's "Game Hack" card, backs to that
     // same game's options rather than all the way to Home.
     data class GameHackFor(val gameName: String) : Screen()
+    // #161 - GameOptionsFor's other 3 destination pages, same
+    // back-to-Options (not Home) pattern as GameHackFor above.
+    data class CoverArtSettingsFor(val gameName: String) : Screen()
+    data class BezelSettingsFor(val gameName: String) : Screen()
+    data class ArgumentsSettingsFor(val gameName: String) : Screen()
 }
 
 // Not private - #47's global Cover Art prefs (GameOptions.kt) live in this
@@ -680,34 +685,10 @@ private fun HypdroidApp(context: MainActivity) {
                 GameOptionsScreen(
                     game = game,
                     options = options,
-                    globalCoverArtEnabled = globalCoverArtEnabled,
-                    onCoverArtChange = { type ->
-                        saveCoverArt(context, game.name, type)
-                        updateGameOptions(game.name, options.copy(coverArt = type))
-                    },
-                    onBezelToggle = { enabled ->
-                        saveBezelEnabled(context, game.name, enabled)
-                        updateGameOptions(game.name, options.copy(bezelEnabled = enabled))
-                    },
-                    onScorebezelAutofitToggle = { enabled ->
-                        saveScorebezelAutofit(context, game.name, enabled)
-                        updateGameOptions(game.name, options.copy(scorebezelAutofit = enabled))
-                    },
-                    onOverlayBezelToggle = { enabled ->
-                        saveOverlayBezel(context, game.name, enabled)
-                        updateGameOptions(game.name, options.copy(overlayBezel = enabled))
-                    },
-                    onAddArgument = { arg ->
-                        val updated = options.arguments + arg
-                        saveArguments(context, game.name, updated)
-                        updateGameOptions(game.name, options.copy(arguments = updated))
-                    },
-                    onRemoveArgument = { arg ->
-                        val updated = options.arguments - arg
-                        saveArguments(context, game.name, updated)
-                        updateGameOptions(game.name, options.copy(arguments = updated))
-                    },
+                    onOpenCoverArtSettings = { currentScreen = Screen.CoverArtSettingsFor(game.name) },
+                    onOpenBezelSettings = { currentScreen = Screen.BezelSettingsFor(game.name) },
                     onOpenGameHack = { currentScreen = Screen.GameHackFor(game.name) },
+                    onOpenArgumentsSettings = { currentScreen = Screen.ArgumentsSettingsFor(game.name) },
                     onBack = { currentScreen = Screen.Home },
                 )
             }
@@ -724,6 +705,72 @@ private fun HypdroidApp(context: MainActivity) {
                     onAspectBezelFixToggle = { enabled ->
                         saveAspectBezelFix(context, game.name, enabled)
                         updateGameOptions(game.name, options.copy(aspectBezelFix = enabled))
+                    },
+                    onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
+                )
+            }
+        }
+        is Screen.CoverArtSettingsFor -> {
+            val game = games.find { it.name == screen.gameName }
+            if (game == null) {
+                LaunchedEffect(Unit) { currentScreen = Screen.Home }
+            } else {
+                val options = gameOptionsMap[game.name] ?: GameOptions(null, false, emptyList())
+                CoverArtSettingsScreen(
+                    game = game,
+                    options = options,
+                    globalCoverArtEnabled = globalCoverArtEnabled,
+                    onCoverArtChange = { type ->
+                        saveCoverArt(context, game.name, type)
+                        updateGameOptions(game.name, options.copy(coverArt = type))
+                    },
+                    onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
+                )
+            }
+        }
+        is Screen.BezelSettingsFor -> {
+            val game = games.find { it.name == screen.gameName }
+            if (game == null) {
+                LaunchedEffect(Unit) { currentScreen = Screen.Home }
+            } else {
+                val options = gameOptionsMap[game.name] ?: GameOptions(null, false, emptyList())
+                BezelSettingsScreen(
+                    game = game,
+                    options = options,
+                    onBezelToggle = { enabled ->
+                        saveBezelEnabled(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(bezelEnabled = enabled))
+                    },
+                    onScorebezelAutofitToggle = { enabled ->
+                        saveScorebezelAutofit(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(scorebezelAutofit = enabled))
+                    },
+                    onOverlayBezelToggle = { enabled ->
+                        saveOverlayBezel(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(overlayBezel = enabled))
+                    },
+                    onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
+                )
+            }
+        }
+        is Screen.ArgumentsSettingsFor -> {
+            val game = games.find { it.name == screen.gameName }
+            if (game == null) {
+                LaunchedEffect(Unit) { currentScreen = Screen.Home }
+            } else {
+                val options = gameOptionsMap[game.name] ?: GameOptions(null, false, emptyList())
+                ArgumentsSettingsScreen(
+                    game = game,
+                    options = options,
+                    onAddArgument = { arg ->
+                        val updated = options.arguments + arg
+                        saveArguments(context, game.name, updated)
+                        updateGameOptions(game.name, options.copy(arguments = updated))
+                    },
+                    onRemoveArgument = { arg ->
+                        val updated = options.arguments - arg
+                        saveArguments(context, game.name, updated)
+                        updateGameOptions(game.name, options.copy(arguments = updated))
                     },
                     onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
                 )
