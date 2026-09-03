@@ -236,6 +236,25 @@ fun savePreserveAspectRatioEnabled(context: Context, enabled: Boolean) {
         .apply()
 }
 
+// #163 - phase 1 of the Carousel Layout brainstorm (see private
+// smoke/video-snaps-ideas.md). Off by default, matching today's carousel
+// unchanged. On: GameCarousel reconfigures to one focused card per page,
+// left-aligned instead of centered - no video frame yet, just proving out
+// the layout/navigation first.
+private const val PREF_ATTRACT_MODE_ENABLED = "attract_mode_enabled"
+
+fun loadAttractModeEnabled(context: Context): Boolean {
+    return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getBoolean(PREF_ATTRACT_MODE_ENABLED, false)
+}
+
+fun saveAttractModeEnabled(context: Context, enabled: Boolean) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(PREF_ATTRACT_MODE_ENABLED, enabled)
+        .apply()
+}
+
 // <media>/bg/<gamename>.png or <media>/bg/default.png, gated entirely by
 // the two toggles above - no automatic fallback when a per-game image is
 // simply missing (that's a deliberate design choice, not an oversight):
