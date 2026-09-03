@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -1072,23 +1073,50 @@ private fun GameCarousel(
         } else {
             gameOptionsMap[game.name]?.coverArt
         }
-        // #163 - Attract Mode positions the focused card toward the left
-        // edge (with a margin, matching the app's standard 16dp) instead of
-        // centering it across the now-full-width page. Off, this is
-        // unchanged from the original three-up centered layout.
-        Box(
-            modifier = Modifier.fillMaxSize().let {
-                if (attractModeEnabled) it.padding(start = 16.dp) else it
-            },
-            contentAlignment = if (attractModeEnabled) Alignment.CenterStart else Alignment.Center,
-        ) {
-            GameCard(
-                game = game,
-                coverArtFile = resolveCoverArtFile(mediaFolderPath, game.name, coverArtOverride),
-                scale = scale,
-                onClick = { onPlay(game) },
-                onLongClick = { onOpenOptions(game) },
-            )
+        if (attractModeEnabled) {
+            // #163/#166 - Attract Mode positions the focused card toward
+            // the left edge (with a margin, matching the app's standard
+            // 16dp) with the attract-frame image beside it, instead of
+            // centering the card across the now-full-width page. Row's
+            // default start-packed Arrangement naturally leaves the
+            // remaining screen width as empty trailing space on the right
+            // (no extra Spacer needed) - background art shows through
+            // there, matching the earlier approved composite mockup.
+            Row(
+                modifier = Modifier.fillMaxSize().padding(start = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(54.dp),
+            ) {
+                GameCard(
+                    game = game,
+                    coverArtFile = resolveCoverArtFile(mediaFolderPath, game.name, coverArtOverride),
+                    scale = scale,
+                    onClick = { onPlay(game) },
+                    onLongClick = { onOpenOptions(game) },
+                )
+                // #166 - placement only, no video yet (that's #168). Sized
+                // to 64% of the carousel's available height (80% of the
+                // card's own 80%-height rule, matching the approved
+                // composite's proportions) at the asset's real 16:9 aspect
+                // ratio - always shown while Attract Mode is on, regardless
+                // of whether this game actually has attract data (#168's
+                // job to make that conditional once real playback exists).
+                Image(
+                    painter = painterResource(id = R.drawable.attract_frame),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxHeight(0.64f).aspectRatio(1920f / 1080f),
+                )
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                GameCard(
+                    game = game,
+                    coverArtFile = resolveCoverArtFile(mediaFolderPath, game.name, coverArtOverride),
+                    scale = scale,
+                    onClick = { onPlay(game) },
+                    onLongClick = { onOpenOptions(game) },
+                )
+            }
         }
     }
 }
