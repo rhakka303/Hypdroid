@@ -27,6 +27,11 @@ data class GameOptions(
     // is also on. Off by default - existing full-screen bezel behavior is
     // unchanged unless explicitly enabled per-game.
     val aspectBezelFix: Boolean = false,
+    // #183 - Game Hack, scoped only to the attract preview (MpvPlayerView),
+    // not real gameplay - a completely separate hypseus-native pipeline.
+    // Adds a post-decode scale-down for performance; off by default, same
+    // convention as every other Game Hack/Bezel toggle in this app.
+    val reduceAttractVideoResolution: Boolean = false,
 )
 
 private const val GAME_OPTIONS_PREFS = "hypdroid_game_options"
@@ -37,6 +42,7 @@ private fun argumentsKey(gameName: String) = "args_$gameName"
 private fun scorebezelAutofitKey(gameName: String) = "scorebezel_autofit_$gameName"
 private fun overlayBezelKey(gameName: String) = "overlaybezel_$gameName"
 private fun aspectBezelFixKey(gameName: String) = "aspectbezelfix_$gameName"
+private fun reduceAttractVideoResolutionKey(gameName: String) = "reduce_attract_video_res_$gameName"
 
 fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val prefs = context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
@@ -54,7 +60,16 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val scorebezelAutofit = prefs.getBoolean(scorebezelAutofitKey(gameName), false)
     val overlayBezel = prefs.getBoolean(overlayBezelKey(gameName), false)
     val aspectBezelFix = prefs.getBoolean(aspectBezelFixKey(gameName), false)
-    return GameOptions(coverArt, bezelEnabled, arguments, scorebezelAutofit, overlayBezel, aspectBezelFix)
+    val reduceAttractVideoResolution = prefs.getBoolean(reduceAttractVideoResolutionKey(gameName), false)
+    return GameOptions(
+        coverArt,
+        bezelEnabled,
+        arguments,
+        scorebezelAutofit,
+        overlayBezel,
+        aspectBezelFix,
+        reduceAttractVideoResolution,
+    )
 }
 
 fun saveCoverArt(context: Context, gameName: String, coverArt: CoverArtType) {
@@ -89,6 +104,13 @@ fun saveAspectBezelFix(context: Context, gameName: String, enabled: Boolean) {
     context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
         .edit()
         .putBoolean(aspectBezelFixKey(gameName), enabled)
+        .apply()
+}
+
+fun saveReduceAttractVideoResolution(context: Context, gameName: String, enabled: Boolean) {
+    context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(reduceAttractVideoResolutionKey(gameName), enabled)
         .apply()
 }
 

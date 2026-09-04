@@ -31,6 +31,7 @@ fun GameHackScreen(
     game: Game,
     options: GameOptions,
     onAspectBezelFixToggle: (Boolean) -> Unit,
+    onReduceAttractVideoResolutionToggle: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -71,9 +72,28 @@ fun GameHackScreen(
                 }
             }
 
-            // Blank/TBD - placeholder for a future Game Hack, not yet decided.
+            // #183 - scoped only to the attract preview (MpvPlayerView),
+            // not real gameplay - a completely separate hypseus-native
+            // pipeline this has no effect on. Post-decode scale-down
+            // (aspect-preserving, not a fixed 1280x720) for performance -
+            // see MpvPlayerView.kt for why "720p" isn't a literal promise
+            // for non-16:9 sources.
             OutlinedCard(modifier = Modifier.weight(1f)) {
-                Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {}
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Reduce Attract Video Resolution", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Scales down the attract preview for performance - attract video only, not real gameplay",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        HypdroidSwitch(
+                            checked = options.reduceAttractVideoResolution,
+                            onCheckedChange = onReduceAttractVideoResolutionToggle,
+                        )
+                    }
+                }
             }
         }
     }

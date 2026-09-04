@@ -64,6 +64,16 @@ fun MpvPlayerView(
     // "loop 5 times" (#168's settled spec) = 1 natural play + 4 repeats -
     // mpv's own loop-file counts *additional* repeats, not total plays.
     loopCount: Int = 4,
+    // #183 - Game Hack, off by default. Post-decode scale-down for
+    // performance - reduces GPU/render bandwidth for the frame, NOT the
+    // CPU cost of decoding the full-resolution source (confirmed against
+    // the real mpv manual - vf=scale runs after decode, not instead of
+    // it). "1280:-2" (not a fixed "1280:720") preserves whatever aspect
+    // ratio the source actually has - a fixed 1280x720 would visibly
+    // stretch a 4:3 source horizontally, confirmed as a real distortion
+    // risk against real files (dragons_lair_2_se is genuinely 4:3, not
+    // 16:9 like dragons_lair_II_1080's own source).
+    reduceResolution: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var surfaceReady by remember { mutableStateOf(false) }
@@ -95,12 +105,18 @@ fun MpvPlayerView(
     // Re-issues loadfile on the one persistent instance whenever the clip
     // identity changes (including the very first time, once the surface
     // is actually ready to receive frames) - never destroy+recreate.
-    LaunchedEffect(surfaceReady, videoPath, audioPath, startSeconds, endSeconds) {
+    LaunchedEffect(surfaceReady, videoPath, audioPath, startSeconds, endSeconds, reduceResolution) {
         if (!surfaceReady) return@LaunchedEffect
         if (videoPath == null) {
             MPVLib.command(arrayOf("stop"))
             return@LaunchedEffect
         }
+        // #183 - set (or clear) as a real option before loadfile, not
+        // folded into loadfile's own per-file options string - vf is a
+        // list-type/filter-chain option, less certain to behave as a
+        // simple per-file override the way start/end do. Re-set on every
+        // load since this is a per-game setting on one reused instance.
+        MPVLib.setOptionString("vf", if (reduceResolution) "scale=1280:-2" else "")
         // Real bug found and fixed (2026-09-03): loop-file combined with
         // per-load start/end, reloaded onto the same persistent instance
         // a second time (i.e. re-focusing a game after navigating away and
