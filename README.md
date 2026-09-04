@@ -128,3 +128,5 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 Built on [Hypseus Singe](https://github.com/DirtBagXon/hypseus-singe) by DirtBagXon, itself a fork of [Hypseus](https://github.com/h0tw1r3/hypseus) by Jeffrey Clark and [Daphne](http://www.daphne-emu.com) by Matt Ownby, with Singe LUA support originally by Scott Duensing.
 
 Touch controls (Hypdroid Touch flavor) built with [RadialGamePad](https://github.com/Swordfish90/RadialGamePad) by Swordfish90.
+
+Attract Mode video playback built with [mpv](https://mpv.io) (via [libmpv-android](https://github.com/jarnedemeulemeester/libmpv-android)'s prebuilt AAR), the mpv/MPlayer/mplayer2 projects.
