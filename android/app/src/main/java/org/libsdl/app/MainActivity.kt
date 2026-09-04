@@ -1015,6 +1015,73 @@ private fun GameCarousel(
     // this only changes how much horizontal room the *page* claims.
     val cardWidth = if (attractModeEnabled) screenWidthDp.dp else (screenWidthDp * 0.319f).dp
 
+    // #179 - hoisted above the pager (was previously declared inside the
+    // video-overlay block further down) so the pager's own onKeyEvent can
+    // read/toggle isPlaying too - a gamepad Handheld device has no touch
+    // to tap the on-screen Play button with. Harmless no-ops when Attract
+    // Mode is off: focusedGame is null, attractClip resolves to null,
+    // isPlaying just never becomes true.
+    val focusedGame = if (attractModeEnabled) games.getOrNull(pagerState.settledPage) else null
+    // Real attract clip, looked up once per focused game (not on every
+    // recomposition). Null is the default/common case (no offset data,
+    // multi-file, zipped, or Daphne without a framefile - see
+    // AttractClip.kt), not an error - the frame stays empty, background
+    // visible through its center, in that case.
+    //
+    // Real bug found and fixed (2026-09-03): findAttractClip does real
+    // file I/O (reading the .singe script + framefile) - doing that
+    // synchronously inside `remember` blocked the whole Row's
+    // recomposition on the main thread, including the plain static frame
+    // image, which is why even just the border took a noticeable beat to
+    // show up when swiping. produceState moves the read to a background
+    // dispatcher so the frame renders immediately regardless of how long
+    // the file read takes; the Play button/video path just update
+    // reactively once it resolves.
+    val attractClip by produceState<AttractClipInfo?>(initialValue = null, focusedGame?.name) {
+        value = focusedGame?.let { game ->
+            withContext(Dispatchers.IO) { findAttractClip(game) }
+        }
+    }
+    // #168 - explicit Play button instead of auto-play-on-focus, simplified
+    // after real testing surfaced repeated auto-restart bugs (loop-file +
+    // repeated same-instance reloads producing an instant EOF and mpv core
+    // shutdown - see MpvPlayerView.kt). Reset whenever the focused game
+    // changes, so leaving and coming back always needs a fresh
+    // tap/press - no ambiguity about "should this auto-resume."
+    var isPlaying by remember(focusedGame?.name) { mutableStateOf(false) }
+    // Real bug found and fixed (2026-09-03): returning from an actual game
+    // (HypseusActivity closing, MainActivity resuming) left the UI showing
+    // a black box instead of the Play button, even though MpvPlayerView's
+    // own ON_RESUME handler now stops playback - this Compose-side
+    // isPlaying state didn't know that happened. Resets in lockstep with
+    // the player's own stop, so the Play button reliably reappears every
+    // time we come back.
+    val homeLifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(homeLifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isPlaying = false
+            }
+        }
+        homeLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { homeLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // Real bug found and fixed (2026-09-03): once the clip reached its own
+    // natural end, the screen went black with no way to replay it -
+    // keep-open=yes was meant to freeze on the last frame, but didn't
+    // visually hold it here. Simpler fix matching the button-driven model
+    // already chosen: auto-return to the Play button once the known clip
+    // duration elapses, same alpha-hide path already used for swiping
+    // away - no black gap, and the button is always available to replay.
+    LaunchedEffect(isPlaying, attractClip) {
+        val clip = attractClip
+        if (isPlaying && clip != null) {
+            val durationMs = ((clip.endSeconds - clip.startSeconds) * 1000).toLong().coerceAtLeast(0)
+            delay(durationMs)
+            isPlaying = false
+        }
+    }
+
     // #168 - the video+frame overlay lives here, as a sibling of the pager
     // rather than inside its per-page content (see MpvPlayerView.kt's own
     // doc comment for the real crash this fixes: MPVLib is a native global
@@ -1053,6 +1120,20 @@ private fun GameCarousel(
                 if (event.key == Key.DirectionDown) {
                     onOpenOptions(games[pagerState.currentPage])
                     return@onKeyEvent true
+                }
+                // #179 - Handheld (non-touch) had no way to trigger the
+                // on-screen Play button at all - all 4 d-pad directions
+                // were already spoken for (paging/Options/implicit focus-
+                // escape), so this uses X instead, toggling the same
+                // isPlaying state the Play button itself sets. No-op
+                // (doesn't consume the key) when the focused game has no
+                // attract clip - nothing to toggle.
+                if (event.key == Key.ButtonX) {
+                    if (attractClip != null) {
+                        isPlaying = !isPlaying
+                        return@onKeyEvent true
+                    }
+                    return@onKeyEvent false
                 }
                 // Launching used to rely on the focused card's own
                 // combinedClickable, which is exactly what made A launch
@@ -1139,69 +1220,9 @@ private fun GameCarousel(
     // settled page is the only one with a stable position to align with,
     // but the underlying player instance itself never tears down for it.
     if (attractModeEnabled) {
-        val focusedGame = games.getOrNull(pagerState.settledPage)
-        // Real attract clip, looked up once per focused game (not on
-        // every recomposition). Null is the default/common case (no
-        // offset data, multi-file, zipped, or Daphne-native - see
-        // AttractClip.kt), not an error - the frame below still shows,
-        // just with nothing playing behind it and background visible
-        // through its center.
-        //
-        // Real bug found and fixed (2026-09-03): findAttractClip does
-        // real file I/O (reading the .singe script + framefile) - doing
-        // that synchronously inside `remember` blocked the whole Row's
-        // recomposition on the main thread, including the plain static
-        // frame image, which is why even just the border took a
-        // noticeable beat to show up when swiping. produceState moves the
-        // read to a background dispatcher so the frame renders
-        // immediately regardless of how long the file read takes; the
-        // Play button/video path just update reactively once it resolves.
-        val attractClip by produceState<AttractClipInfo?>(initialValue = null, focusedGame?.name) {
-            value = focusedGame?.let { game ->
-                withContext(Dispatchers.IO) { findAttractClip(game) }
-            }
-        }
-        // #168 - explicit Play button instead of auto-play-on-focus,
-        // simplified after real testing surfaced repeated auto-restart
-        // bugs (loop-file + repeated same-instance reloads producing an
-        // instant EOF and mpv core shutdown - see MpvPlayerView.kt). Reset
-        // whenever the focused game changes, so leaving and coming back
-        // always needs a fresh tap - no ambiguity about "should this
-        // auto-resume."
-        var isPlaying by remember(focusedGame?.name) { mutableStateOf(false) }
-        // Real bug found and fixed (2026-09-03): returning from an actual
-        // game (HypseusActivity closing, MainActivity resuming) left the
-        // UI showing a black box instead of the Play button, even though
-        // MpvPlayerView's own ON_RESUME handler now stops playback - this
-        // Compose-side isPlaying state didn't know that happened. Resets
-        // in lockstep with the player's own stop, so the Play button
-        // reliably reappears every time we come back.
-        val homeLifecycleOwner = LocalLifecycleOwner.current
-        DisposableEffect(homeLifecycleOwner) {
-            val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) {
-                    isPlaying = false
-                }
-            }
-            homeLifecycleOwner.lifecycle.addObserver(observer)
-            onDispose { homeLifecycleOwner.lifecycle.removeObserver(observer) }
-        }
-        // Real bug found and fixed (2026-09-03): once the clip reached its
-        // own natural end, the screen went black with no way to replay it
-        // - keep-open=yes was meant to freeze on the last frame, but
-        // didn't visually hold it here. Simpler fix matching the
-        // button-driven model already chosen: auto-return to the Play
-        // button once the known clip duration elapses, same alpha-hide
-        // path already used for swiping away - no black gap, and the
-        // button is always available to replay.
-        LaunchedEffect(isPlaying, attractClip) {
-            val clip = attractClip
-            if (isPlaying && clip != null) {
-                val durationMs = ((clip.endSeconds - clip.startSeconds) * 1000).toLong().coerceAtLeast(0)
-                delay(durationMs)
-                isPlaying = false
-            }
-        }
+        // #179 - focusedGame/attractClip/isPlaying and their effects are
+        // now hoisted above the pager (shared with onKeyEvent's X-button
+        // toggle) - this block just renders them.
         Row(
             modifier = Modifier.fillMaxSize().padding(start = 16.dp)
                 .alpha(if (pagerState.isScrollInProgress) 0f else 1f),
