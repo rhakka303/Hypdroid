@@ -727,6 +727,10 @@ private fun HypdroidApp(context: MainActivity) {
                         saveAspectBezelFix(context, game.name, enabled)
                         updateGameOptions(game.name, options.copy(aspectBezelFix = enabled))
                     },
+                    onReduceAttractVideoResolutionToggle = { enabled ->
+                        saveReduceAttractVideoResolution(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(reduceAttractVideoResolution = enabled))
+                    },
                     onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
                 )
             }
@@ -1258,6 +1262,9 @@ private fun GameCarousel(
                     audioPath = if (isPlaying) attractClip?.audioPath else null,
                     startSeconds = attractClip?.startSeconds,
                     endSeconds = attractClip?.endSeconds,
+                    // #183 - per-game Game Hack, attract preview only.
+                    reduceResolution = focusedGame?.let { gameOptionsMap[it.name]?.reduceAttractVideoResolution }
+                        ?: false,
                     modifier = Modifier.fillMaxSize().alpha(if (isPlaying && attractClip != null) 1f else 0f),
                 )
                 Image(
