@@ -386,7 +386,7 @@ fun AboutScreen(context: Context, onBack: () -> Unit) {
         Text(
             "Built on Hypseus Singe by DirtBagXon (github.com/DirtBagXon/hypseus-singe), " +
                 "licensed under GPL-3.0.\n\n" +
-                "Also uses SDL3, Coil, and RadialGamePad.",
+                "Also uses SDL3, Coil, RadialGamePad, and mpv (mpv.io).",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
