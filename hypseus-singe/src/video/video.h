@@ -326,6 +326,12 @@ void set_queue_screenshot(bool bEnabled);
 
 unsigned int get_logical_width();
 unsigned int get_logical_height();
+// #185 - the video's actual on-screen rect, already aspect/scale/
+// centering-corrected. See video.cpp for the full reasoning.
+int get_scaling_rect_x();
+int get_scaling_rect_y();
+int get_scaling_rect_w();
+int get_scaling_rect_h();
 float get_fRotateDegrees();
 
 std::vector<SDL_Rect> get_displays();

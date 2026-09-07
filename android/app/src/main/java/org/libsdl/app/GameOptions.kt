@@ -32,6 +32,14 @@ data class GameOptions(
     // Adds a post-decode scale-down for performance; off by default, same
     // convention as every other Game Hack/Bezel toggle in this app.
     val reduceAttractVideoResolution: Boolean = false,
+    // #185 - "Touch Lightgun" Game Hack. On passes hypseus's own
+    // "-manymouse" flag (see cmdline.cpp), which routes mouse input through
+    // the Android ManyMouse backend (hypseus-singe/src/manymouse/
+    // android_touch.cpp) instead of the default SDL relative-mouse path -
+    // confirmed on real hardware to be what makes tap-to-aim/tap-to-shoot
+    // work at all. Off by default, same convention as every other Game
+    // Hack toggle in this app.
+    val touchLightgun: Boolean = false,
 )
 
 private const val GAME_OPTIONS_PREFS = "hypdroid_game_options"
@@ -43,6 +51,7 @@ private fun scorebezelAutofitKey(gameName: String) = "scorebezel_autofit_$gameNa
 private fun overlayBezelKey(gameName: String) = "overlaybezel_$gameName"
 private fun aspectBezelFixKey(gameName: String) = "aspectbezelfix_$gameName"
 private fun reduceAttractVideoResolutionKey(gameName: String) = "reduce_attract_video_res_$gameName"
+private fun touchLightgunKey(gameName: String) = "touch_lightgun_$gameName"
 
 fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val prefs = context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
@@ -61,6 +70,7 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val overlayBezel = prefs.getBoolean(overlayBezelKey(gameName), false)
     val aspectBezelFix = prefs.getBoolean(aspectBezelFixKey(gameName), false)
     val reduceAttractVideoResolution = prefs.getBoolean(reduceAttractVideoResolutionKey(gameName), false)
+    val touchLightgun = prefs.getBoolean(touchLightgunKey(gameName), false)
     return GameOptions(
         coverArt,
         bezelEnabled,
@@ -69,6 +79,7 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
         overlayBezel,
         aspectBezelFix,
         reduceAttractVideoResolution,
+        touchLightgun,
     )
 }
 
@@ -111,6 +122,13 @@ fun saveReduceAttractVideoResolution(context: Context, gameName: String, enabled
     context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
         .edit()
         .putBoolean(reduceAttractVideoResolutionKey(gameName), enabled)
+        .apply()
+}
+
+fun saveTouchLightgun(context: Context, gameName: String, enabled: Boolean) {
+    context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(touchLightgunKey(gameName), enabled)
         .apply()
 }
 

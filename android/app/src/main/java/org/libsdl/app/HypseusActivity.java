@@ -25,6 +25,13 @@ public class HypseusActivity extends SDLActivity {
         "org.libsdl.app.HypseusActivity.EXTRA_TOUCH_STICK_MODE";
     public static final String EXTRA_TOUCH_OPACITY =
         "org.libsdl.app.HypseusActivity.EXTRA_TOUCH_OPACITY";
+    // #185 - independent of EXTRA_TOUCH_ENABLED. When true, only the bottom
+    // SELECT/START/L3/R3 row is shown (see TouchOverlay.attach()'s
+    // minimalOnly) - Touch Lightgun hides the rest of the overlay so it
+    // doesn't sit on top of tap-to-aim, but a touch-only device still needs
+    // some way to reach Start/Select/L3/R3.
+    public static final String EXTRA_TOUCH_MINIMAL =
+        "org.libsdl.app.HypseusActivity.EXTRA_TOUCH_MINIMAL";
 
     // #83 - a no-op unless the Settings "Touch Controls" toggle is on (see
     // TouchOverlay.attach()). Registered/torn down for the lifetime of a
@@ -59,7 +66,8 @@ public class HypseusActivity extends SDLActivity {
         touchOverlay.attach(
             getIntent().getBooleanExtra(EXTRA_TOUCH_ENABLED, false),
             getIntent().getBooleanExtra(EXTRA_TOUCH_STICK_MODE, false),
-            getIntent().getFloatExtra(EXTRA_TOUCH_OPACITY, 0.5f));
+            getIntent().getFloatExtra(EXTRA_TOUCH_OPACITY, 0.5f),
+            getIntent().getBooleanExtra(EXTRA_TOUCH_MINIMAL, false));
     }
 
     @Override

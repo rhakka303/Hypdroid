@@ -32,6 +32,7 @@ fun GameHackScreen(
     options: GameOptions,
     onAspectBezelFixToggle: (Boolean) -> Unit,
     onReduceAttractVideoResolutionToggle: (Boolean) -> Unit,
+    onTouchLightgunToggle: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -95,6 +96,40 @@ fun GameHackScreen(
                     }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // #185 - confirmed on real hardware: routes mouse input through
+            // the Android ManyMouse backend (-manymouse, see cmdline.cpp)
+            // instead of the default SDL relative-mouse path, which is what
+            // makes tap-to-aim/tap-to-shoot work at all - the default path
+            // only ever moved the cursor via relative deltas (thumbstick),
+            // never from a stationary tap. Off by default; every other
+            // game's mouse handling is unaffected unless this is
+            // explicitly turned on.
+            OutlinedCard(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Touch Lightgun", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Tap the screen to aim and shoot, for games with real lightgun support - confirmed working across multiple gun games so far",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        HypdroidSwitch(
+                            checked = options.touchLightgun,
+                            onCheckedChange = onTouchLightgunToggle,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }

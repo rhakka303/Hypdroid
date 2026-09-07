@@ -137,7 +137,8 @@ class TouchOverlay(private val activity: Activity) {
     private val dpadStickId = 0
 
     /**
-     * Only does anything if the Settings toggle is on - a no-op otherwise.
+     * Only does anything if the Settings toggle is on (or minimalOnly is
+     * true) - a no-op otherwise.
      *
      * #85 - these three values are passed in from the launching Intent
      * rather than read from SharedPreferences here. HypseusActivity now
@@ -148,9 +149,17 @@ class TouchOverlay(private val activity: Activity) {
      * most of the time (a freshly-spawned game process does load from
      * disk) but only by relying on undocumented flush ordering. The
      * launching Intent is an explicit, synchronous hand-off instead.
+     *
+     * #185 - minimalOnly (independent of the `enabled` Settings toggle):
+     * skips the D-pad/face-button/shoulder-button clusters entirely and
+     * only builds the bottom SELECT/START/L3/R3 row. Touch Lightgun hides
+     * the full overlay so it doesn't sit on top of tap-to-aim, but on a
+     * touch-only device (no physical buttons at all) that would otherwise
+     * leave no way to reach Start/Select/L3/R3 - found on real hardware
+     * (Samsung, 2026-09-06): "we need bottom, select start r3 l3."
      */
-    fun attach(enabled: Boolean, stickMode: Boolean, opacity: Float) {
-        if (!enabled) return
+    fun attach(enabled: Boolean, stickMode: Boolean, opacity: Float, minimalOnly: Boolean = false) {
+        if (!enabled && !minimalOnly) return
 
         val layout = SDLActivity.mLayout ?: return
         val metrics = activity.resources.displayMetrics
@@ -174,106 +183,112 @@ class TouchOverlay(private val activity: Activity) {
             false,
         )
 
-        // Sized off the shorter screen dimension (== height in landscape
-        // gameplay) rather than a fixed dp value, so it's a real thumb-sized
-        // target on a tablet instead of a small fraction of one.
-        val mainPadSizePx = (0.294f * min(metrics.widthPixels, metrics.heightPixels)).toInt()
-
-        val dpadPrimary = if (stickMode) {
-            PrimaryDialConfig.Stick(id = dpadStickId, contentDescription = "Movement")
-        } else {
-            PrimaryDialConfig.Cross(CrossConfig(id = dpadStickId))
-        }
-        val dpadPad = RadialGamePad(
-            RadialGamePadConfig(
-                sockets = 4,
-                primaryDial = dpadPrimary,
-                secondaryDials = emptyList(),
-                theme = padTheme,
-            ),
-            8f,
-            activity,
-        )
-        val facePad = RadialGamePad(
-            RadialGamePadConfig(
-                sockets = 4,
-                primaryDial = PrimaryDialConfig.PrimaryButtons(
-                    // Same 4 geometric slots as before, relabeled per the
-                    // owner's on-device correction: old A-slot -> B, old
-                    // B-slot -> Y, old Y-slot -> A, X-slot unchanged.
-                    dials = listOf(
-                        ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_B, label = "B"),
-                        ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_Y, label = "Y"),
-                        ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_X, label = "X"),
-                        ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_A, label = "A"),
-                    ),
-                ),
-                secondaryDials = emptyList(),
-                theme = padTheme,
-            ),
-            8f,
-            activity,
-        )
-
-        addView(
-            layout, dpadPad, mainPadSizePx, mainPadSizePx,
-            startRule = RelativeLayout.ALIGN_PARENT_START,
-            centerVertical = true,
-        )
-        addView(
-            layout, facePad, mainPadSizePx, mainPadSizePx,
-            endRule = RelativeLayout.ALIGN_PARENT_END,
-            centerVertical = true,
-        )
-
-        val eventScope = CoroutineScope(Dispatchers.Main + Job())
-        scope = eventScope
-        eventScope.launch { dpadPad.events().collect { handleEvent(it, stickMode) } }
-        eventScope.launch { facePad.events().collect { handleEvent(it, stickMode) } }
-
-        // Shoulder buttons - separated entirely from the D-pad/face-button
-        // pads and pinned to the top corners, big rectangular targets. #97 -
-        // sized off the shorter screen dimension, same basis as mainPadSizePx
-        // above, instead of a fixed dp constant that stayed the same physical
-        // size regardless of device. Fractions chosen to match the previous
-        // 120dp x 64dp constants' actual rendered size on the Samsung Tab
-        // S7+ (340dpi, 1752px shorter dimension) - the real device this was
-        // already tuned/verified against - so this is a like-for-like swap
-        // in sizing basis, not a visual redesign.
+        // Shared by the shoulder buttons (skipped when minimalOnly) and the
+        // bottom SELECT/START/L3/R3 row (always built), so this has to be
+        // computed unconditionally either way.
         val shoulderWidthPx = (0.145f * min(metrics.widthPixels, metrics.heightPixels)).toInt()
         val shoulderHeightPx = (0.078f * min(metrics.widthPixels, metrics.heightPixels)).toInt()
-        val l1 = plainButton("L1", opacityAlpha, R.drawable.hypdroid_touch_bumper_left_b)
-        val l2 = plainButton("L2", opacityAlpha, R.drawable.hypdroid_touch_trigger_left_b)
-        val r1 = plainButton("R1", opacityAlpha, R.drawable.hypdroid_touch_bumper_right_b)
-        val r2 = plainButton("R2", opacityAlpha, R.drawable.hypdroid_touch_trigger_right_b)
 
-        addView(
-            layout, l1, shoulderWidthPx, shoulderHeightPx,
-            startRule = RelativeLayout.ALIGN_PARENT_START,
-            topRule = RelativeLayout.ALIGN_PARENT_TOP,
-        )
-        addView(
-            layout, l2, shoulderWidthPx, shoulderHeightPx,
-            startRule = RelativeLayout.ALIGN_PARENT_START,
-            below = l1,
-            topMarginPx = (12 * density).toInt(),
-        )
-        addView(
-            layout, r1, shoulderWidthPx, shoulderHeightPx,
-            endRule = RelativeLayout.ALIGN_PARENT_END,
-            topRule = RelativeLayout.ALIGN_PARENT_TOP,
-        )
-        addView(
-            layout, r2, shoulderWidthPx, shoulderHeightPx,
-            endRule = RelativeLayout.ALIGN_PARENT_END,
-            below = r1,
-            topMarginPx = (12 * density).toInt(),
-        )
+        if (!minimalOnly) {
+            // Sized off the shorter screen dimension (== height in landscape
+            // gameplay) rather than a fixed dp value, so it's a real thumb-sized
+            // target on a tablet instead of a small fraction of one.
+            val mainPadSizePx = (0.294f * min(metrics.widthPixels, metrics.heightPixels)).toInt()
 
-        bindPlainButton(l1, KeyEvent.KEYCODE_BUTTON_L1)
-        bindPlainButton(l2, KeyEvent.KEYCODE_BUTTON_L2)
-        bindPlainButton(r1, KeyEvent.KEYCODE_BUTTON_R1)
-        bindPlainButton(r2, KeyEvent.KEYCODE_BUTTON_R2)
+            val dpadPrimary = if (stickMode) {
+                PrimaryDialConfig.Stick(id = dpadStickId, contentDescription = "Movement")
+            } else {
+                PrimaryDialConfig.Cross(CrossConfig(id = dpadStickId))
+            }
+            val dpadPad = RadialGamePad(
+                RadialGamePadConfig(
+                    sockets = 4,
+                    primaryDial = dpadPrimary,
+                    secondaryDials = emptyList(),
+                    theme = padTheme,
+                ),
+                8f,
+                activity,
+            )
+            val facePad = RadialGamePad(
+                RadialGamePadConfig(
+                    sockets = 4,
+                    primaryDial = PrimaryDialConfig.PrimaryButtons(
+                        // Same 4 geometric slots as before, relabeled per the
+                        // owner's on-device correction: old A-slot -> B, old
+                        // B-slot -> Y, old Y-slot -> A, X-slot unchanged.
+                        dials = listOf(
+                            ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_B, label = "B"),
+                            ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_Y, label = "Y"),
+                            ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_X, label = "X"),
+                            ButtonConfig(id = KeyEvent.KEYCODE_BUTTON_A, label = "A"),
+                        ),
+                    ),
+                    secondaryDials = emptyList(),
+                    theme = padTheme,
+                ),
+                8f,
+                activity,
+            )
+
+            addView(
+                layout, dpadPad, mainPadSizePx, mainPadSizePx,
+                startRule = RelativeLayout.ALIGN_PARENT_START,
+                centerVertical = true,
+            )
+            addView(
+                layout, facePad, mainPadSizePx, mainPadSizePx,
+                endRule = RelativeLayout.ALIGN_PARENT_END,
+                centerVertical = true,
+            )
+
+            val eventScope = CoroutineScope(Dispatchers.Main + Job())
+            scope = eventScope
+            eventScope.launch { dpadPad.events().collect { handleEvent(it, stickMode) } }
+            eventScope.launch { facePad.events().collect { handleEvent(it, stickMode) } }
+
+            // Shoulder buttons - separated entirely from the D-pad/face-button
+            // pads and pinned to the top corners, big rectangular targets. #97 -
+            // sized off the shorter screen dimension, same basis as mainPadSizePx
+            // above, instead of a fixed dp constant that stayed the same physical
+            // size regardless of device. Fractions chosen to match the previous
+            // 120dp x 64dp constants' actual rendered size on the Samsung Tab
+            // S7+ (340dpi, 1752px shorter dimension) - the real device this was
+            // already tuned/verified against - so this is a like-for-like swap
+            // in sizing basis, not a visual redesign.
+            val l1 = plainButton("L1", opacityAlpha, R.drawable.hypdroid_touch_bumper_left_b)
+            val l2 = plainButton("L2", opacityAlpha, R.drawable.hypdroid_touch_trigger_left_b)
+            val r1 = plainButton("R1", opacityAlpha, R.drawable.hypdroid_touch_bumper_right_b)
+            val r2 = plainButton("R2", opacityAlpha, R.drawable.hypdroid_touch_trigger_right_b)
+
+            addView(
+                layout, l1, shoulderWidthPx, shoulderHeightPx,
+                startRule = RelativeLayout.ALIGN_PARENT_START,
+                topRule = RelativeLayout.ALIGN_PARENT_TOP,
+            )
+            addView(
+                layout, l2, shoulderWidthPx, shoulderHeightPx,
+                startRule = RelativeLayout.ALIGN_PARENT_START,
+                below = l1,
+                topMarginPx = (12 * density).toInt(),
+            )
+            addView(
+                layout, r1, shoulderWidthPx, shoulderHeightPx,
+                endRule = RelativeLayout.ALIGN_PARENT_END,
+                topRule = RelativeLayout.ALIGN_PARENT_TOP,
+            )
+            addView(
+                layout, r2, shoulderWidthPx, shoulderHeightPx,
+                endRule = RelativeLayout.ALIGN_PARENT_END,
+                below = r1,
+                topMarginPx = (12 * density).toInt(),
+            )
+
+            bindPlainButton(l1, KeyEvent.KEYCODE_BUTTON_L1)
+            bindPlainButton(l2, KeyEvent.KEYCODE_BUTTON_L2)
+            bindPlainButton(r1, KeyEvent.KEYCODE_BUTTON_R1)
+            bindPlainButton(r2, KeyEvent.KEYCODE_BUTTON_R2)
+        }
 
         // SELECT/START - centered at the bottom, same shape/size as the
         // shoulder buttons, matching PPSSPP's bottom-center placement. L3/R3

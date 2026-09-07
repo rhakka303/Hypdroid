@@ -1439,6 +1439,16 @@ SDL_TextureAccess get_textureaccess() { return g_texture_access; }
 int get_scalefactor() { return g_scalefactor; }
 unsigned int get_logical_width() { return g_logical_rect.w; }
 unsigned int get_logical_height() { return g_logical_rect.h; }
+// #185 - g_scaling_rect is the video's own actual on-screen rect (already
+// aspect/scale/centering-corrected, recomputed by format_fullscreen_render()
+// whenever display geometry changes) - exposed so a touch-to-mouse
+// coordinate mapping can use the same numbers hypseus itself already
+// computes, instead of an independently re-derived approximation that could
+// drift out of sync with active display settings.
+int get_scaling_rect_x() { return g_scaling_rect.x; }
+int get_scaling_rect_y() { return g_scaling_rect.y; }
+int get_scaling_rect_w() { return g_scaling_rect.w; }
+int get_scaling_rect_h() { return g_scaling_rect.h; }
 float get_fRotateDegrees() { return g_fRotateDegrees; }
 
 bool get_opengl() { return VIDEO_HAS(OPENGL); }
