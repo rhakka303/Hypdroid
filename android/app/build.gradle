@@ -63,8 +63,8 @@ android {
         // package rename was scoped out as unnecessary churn for a change
         // that's otherwise invisible to any user.
         applicationId "com.hypdroid.app"
-        versionCode 5
-        versionName "5.0"
+        versionCode 6
+        versionName "6.0"
         externalNativeBuild {
             cmake {
                 // android-28 matches what Phase B's vcpkg triplet and the
