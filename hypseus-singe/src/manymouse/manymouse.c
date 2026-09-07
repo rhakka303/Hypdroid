@@ -18,6 +18,8 @@ extern const ManyMouseDriver *ManyMouseDriver_evdev;
 extern const ManyMouseDriver *ManyMouseDriver_xinput2;
 extern const ManyMouseDriver *ManyMouseDriver_hidmanager;
 extern const ManyMouseDriver *ManyMouseDriver_hidutilities;
+/* #185 - see android_touch.cpp; null on every platform but Android. */
+extern const ManyMouseDriver *ManyMouseDriver_android;
 
 /*
  * These have to be in the favored order...obviously it doesn't matter if the
@@ -32,6 +34,7 @@ extern const ManyMouseDriver *ManyMouseDriver_hidutilities;
 
 static const ManyMouseDriver **mice_drivers[] =
 {
+    &ManyMouseDriver_android,
     &ManyMouseDriver_evdev,
     &ManyMouseDriver_xinput2,
     &ManyMouseDriver_windows,

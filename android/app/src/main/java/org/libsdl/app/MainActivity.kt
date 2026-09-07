@@ -410,17 +410,48 @@ private fun HypdroidApp(context: MainActivity) {
         if (options?.aspectBezelFix == true) {
             args += "-aspectbezelfix"
         }
+        // #185 - real hypseus CLI flag (cmdline.cpp), not a Hypdroid
+        // invention. Confirmed on real hardware to be what makes
+        // tap-to-aim/tap-to-shoot work at all.
+        if (options?.touchLightgun == true) {
+            args += "-manymouse"
+        }
         if (preserveAspectRatioEnabled) {
             args += "-preserve_aspect_ratio"
         }
         options?.arguments?.forEach { entry ->
             args += entry.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
         }
+        // #185 - the D-pad/ABXY/shoulder touch overlay would otherwise sit
+        // on top of (and steal taps meant for) tap-to-aim, so the full
+        // overlay is hidden for this session whenever Touch Lightgun is on
+        // - a per-session override, not a change to the global
+        // touch-controls setting.
+        //
+        // The bottom SELECT/START/L3/R3 row (EXTRA_TOUCH_MINIMAL) only
+        // shows when the global Touch Controls setting is ALSO on - not
+        // whenever Lightgun is on by itself. On a touch-only device (no
+        // physical buttons at all) that setting is expected to be on, so
+        // the row appears and hiding the rest doesn't strand Start/Select
+        // - found on real hardware (Samsung, 2026-09-06): "we need bottom,
+        // select start r3 l3." On Handheld, real hardware already has
+        // physical Select/Start/L3/R3 - if Touch Controls is off there
+        // (the expected default, gamepad-first hardware), Lightgun mode
+        // correctly shows nothing rather than a redundant on-screen row
+        // duplicating buttons that already exist, and avoids registering
+        // TouchOverlay's virtual joystick as a second controller alongside
+        // the real one - owner's own reasoning, 2026-09-06: "handheld, has
+        // physical buttons for select, start, l3 and r3... touch and
+        // hypseus recognizes it as a second controller."
+        val touchLightgun = options?.touchLightgun == true
+        val touchEnabledForSession = touchControlsEnabled && !touchLightgun
+        val touchMinimalForSession = touchLightgun && touchControlsEnabled
         val intent = Intent(context, HypseusActivity::class.java)
             .putExtra(HypseusActivity.EXTRA_ARGS, args.toTypedArray())
-            .putExtra(HypseusActivity.EXTRA_TOUCH_ENABLED, touchControlsEnabled)
+            .putExtra(HypseusActivity.EXTRA_TOUCH_ENABLED, touchEnabledForSession)
             .putExtra(HypseusActivity.EXTRA_TOUCH_STICK_MODE, touchControlsStickMode)
             .putExtra(HypseusActivity.EXTRA_TOUCH_OPACITY, touchControlsOpacity)
+            .putExtra(HypseusActivity.EXTRA_TOUCH_MINIMAL, touchMinimalForSession)
         context.startActivity(intent)
     }
 
@@ -730,6 +761,10 @@ private fun HypdroidApp(context: MainActivity) {
                     onReduceAttractVideoResolutionToggle = { enabled ->
                         saveReduceAttractVideoResolution(context, game.name, enabled)
                         updateGameOptions(game.name, options.copy(reduceAttractVideoResolution = enabled))
+                    },
+                    onTouchLightgunToggle = { enabled ->
+                        saveTouchLightgun(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(touchLightgun = enabled))
                     },
                     onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
                 )
