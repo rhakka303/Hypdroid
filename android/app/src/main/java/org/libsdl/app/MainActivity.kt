@@ -607,11 +607,11 @@ private fun HypdroidApp(context: MainActivity) {
             // folder picker alone.
             instructions = "Recommended folder name: hypseus\n\n" +
                 "Create subfolders inside your game folder:\n" +
-                "- roms - Daphne-native ROM(s)\n" +
-                "- vldp - Daphne-native framefile folder(s)\n" +
-                "- singe - fan-made games\n\n" +
+                "- roms: Daphne-native ROM(s)\n" +
+                "- vldp: Daphne-native framefile folder(s)\n" +
+                "- singe: fan-made games\n\n" +
                 "Unzipped Game Requirements:\n" +
-                "- Framework - required in singe folder",
+                "- Framework: required in singe folder",
             // #88 - recovery path for onboarding's All Files Access row
             // (Touch only) - null on Handheld, which has no such concept.
             permissionRow = if (isAllFilesAccessSupported()) {
@@ -646,10 +646,10 @@ private fun HypdroidApp(context: MainActivity) {
             // resolution rather than relying on scale-to-fit.
             instructions = "Recommended folder name: media\n\n" +
                 "Create subfolders inside your media folder:\n" +
-                "- box - 2d or 3d box art\n" +
-                "- cd - CD/laserdisc art\n" +
-                "- logo - logo art\n" +
-                "- bg - Background art, same resolution as your device\n\n" +
+                "- box: 2d or 3d box art\n" +
+                "- cd: CD/laserdisc art\n" +
+                "- logo: logo art\n" +
+                "- bg: Background art, same resolution as your device\n\n" +
                 "Required format: PNG",
             onChange = { pickMediaFolder.launch(null) },
             onBack = { currentScreen = Screen.Settings },

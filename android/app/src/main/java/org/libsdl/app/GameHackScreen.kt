@@ -61,7 +61,7 @@ fun GameHackScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Aspect Ratio Bezel Fix", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Matches this game's bezel to the video - only confirmed on one gun game so far",
+                                "Matches this game's bezel to the video. Only confirmed on one gun game so far.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -85,7 +85,7 @@ fun GameHackScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Reduce Attract Video Resolution", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Scales down the attract preview for performance - attract video only, not real gameplay",
+                                "Scales down the attract preview for performance. Attract video only, not real gameplay.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -118,7 +118,7 @@ fun GameHackScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Touch Lightgun", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Tap the screen to aim and shoot, for games with real lightgun support - confirmed working across multiple gun games so far",
+                                "Tap the screen to aim and shoot, for games with real lightgun support.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
