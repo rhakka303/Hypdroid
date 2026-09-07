@@ -321,6 +321,11 @@ fun AppSettingsScreen(
                                     "Off: today's three-card carousel.",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
+                            Text(
+                                "Experimental",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
                         }
                         HypdroidSwitch(checked = attractModeEnabled, onCheckedChange = onAttractModeToggle)
                     }
