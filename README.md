@@ -32,6 +32,8 @@ A standalone Android port of [Hypseus Singe](https://github.com/DirtBagXon/hypse
 
 **5. Your games should now show up on the dashboard.** If they don't, see Troubleshooting below.
 
+**6. Access a game's Options.** Every game has its own Options screen (Cover Art, Bezel, Game Hacks, custom launch arguments). Handheld: with a game focused, press **Down** on the D-pad. Touch: **press and hold** on a game's tile.
+
 ## What this is
 
 - A from-scratch native build of hypseus-singe for `arm64-v8a` Android, using SDL3's official Android support.
