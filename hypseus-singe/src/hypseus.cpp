@@ -172,18 +172,21 @@ int main(int argc, char **argv)
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
 
 #ifdef __ANDROID__
-    // Hypdroid per-game "Audio Driver" Game Hack (#193): when the launcher
-    // passes -openslES, force SDL's OpenSL ES audio backend instead of the
-    // default AAudio. SDL selects its audio driver here at SDL_Init, before
-    // parse_cmd_line() runs, so the flag is read straight from argv - the
-    // normal parser (cmdline.cpp) also accepts it as a no-op so it isn't
-    // rejected as unknown. AAudio crackles/pops on game audio on some
-    // devices; OpenSL ES does not.
-    for (int i = 1; i < argc; ++i) {
-        if (SDL_strcasecmp(argv[i], "-openslES") == 0) {
-            SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "openslES");
-            break;
+    // Hypdroid (#195): default Android audio to SDL's OpenSL ES backend
+    // instead of AAudio. SDL selects its audio driver here at SDL_Init,
+    // before parse_cmd_line() runs, so this must be set from argv directly.
+    // AAudio underruns and crackles/pops on the game audio on some devices;
+    // OpenSL ES does not. The global "Swap Audio Drivers" App Setting passes
+    // -aaudio to opt back into AAudio (cmdline.cpp accepts it as a no-op).
+    {
+        const char *audio_driver = "openslES";
+        for (int i = 1; i < argc; ++i) {
+            if (SDL_strcasecmp(argv[i], "-aaudio") == 0) {
+                audio_driver = "aaudio";
+                break;
+            }
         }
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, audio_driver);
     }
 #endif
 

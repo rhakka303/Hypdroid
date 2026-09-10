@@ -40,12 +40,6 @@ data class GameOptions(
     // work at all. Off by default, same convention as every other Game
     // Hack toggle in this app.
     val touchLightgun: Boolean = false,
-    // #193 - "Audio Driver" Game Hack. On passes "-openslES" (see
-    // cmdline.cpp / hypseus.cpp), forcing SDL's OpenSL ES audio backend
-    // instead of the default AAudio. AAudio crackles/pops on the game
-    // audio on some devices; OpenSL ES does not. Off by default, same
-    // convention as every other Game Hack toggle in this app.
-    val forceOpenslEs: Boolean = false,
 )
 
 private const val GAME_OPTIONS_PREFS = "hypdroid_game_options"
@@ -58,7 +52,6 @@ private fun overlayBezelKey(gameName: String) = "overlaybezel_$gameName"
 private fun aspectBezelFixKey(gameName: String) = "aspectbezelfix_$gameName"
 private fun reduceAttractVideoResolutionKey(gameName: String) = "reduce_attract_video_res_$gameName"
 private fun touchLightgunKey(gameName: String) = "touch_lightgun_$gameName"
-private fun forceOpenslEsKey(gameName: String) = "force_opensles_$gameName"
 
 fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val prefs = context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
@@ -78,7 +71,6 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val aspectBezelFix = prefs.getBoolean(aspectBezelFixKey(gameName), false)
     val reduceAttractVideoResolution = prefs.getBoolean(reduceAttractVideoResolutionKey(gameName), false)
     val touchLightgun = prefs.getBoolean(touchLightgunKey(gameName), false)
-    val forceOpenslEs = prefs.getBoolean(forceOpenslEsKey(gameName), false)
     return GameOptions(
         coverArt,
         bezelEnabled,
@@ -88,7 +80,6 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
         aspectBezelFix,
         reduceAttractVideoResolution,
         touchLightgun,
-        forceOpenslEs,
     )
 }
 
@@ -138,13 +129,6 @@ fun saveTouchLightgun(context: Context, gameName: String, enabled: Boolean) {
     context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
         .edit()
         .putBoolean(touchLightgunKey(gameName), enabled)
-        .apply()
-}
-
-fun saveForceOpenslEs(context: Context, gameName: String, enabled: Boolean) {
-    context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putBoolean(forceOpenslEsKey(gameName), enabled)
         .apply()
 }
 
@@ -308,6 +292,24 @@ fun saveAttractModeEnabled(context: Context, enabled: Boolean) {
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
         .putBoolean(PREF_ATTRACT_MODE_ENABLED, enabled)
+        .apply()
+}
+
+// #195 - "Swap Audio Drivers". Android now defaults to SDL's OpenSL ES
+// audio backend (see hypseus.cpp), which fixes AAudio underrun crackle/pop
+// on the game audio on some devices. On: pass "-aaudio" to switch every
+// game back to AAudio. Off by default = OpenSL ES.
+private const val PREF_USE_AAUDIO = "use_aaudio"
+
+fun loadUseAAudioEnabled(context: Context): Boolean {
+    return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getBoolean(PREF_USE_AAUDIO, false)
+}
+
+fun saveUseAAudioEnabled(context: Context, enabled: Boolean) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(PREF_USE_AAUDIO, enabled)
         .apply()
 }
 
