@@ -340,6 +340,10 @@ private fun HypdroidApp(context: MainActivity) {
     // synchronous-read pattern as the toggles above; read once here, passed
     // down into GameCarousel below.
     var attractModeEnabled by remember { mutableStateOf(loadAttractModeEnabled(context)) }
+    // #195 - global "Swap Audio Drivers". Same synchronous-read pattern;
+    // baked into the launch argv below as -aaudio when on. Android defaults
+    // to OpenSL ES (hypseus.cpp); this opts every game back to AAudio.
+    var useAAudioEnabled by remember { mutableStateOf(loadUseAAudioEnabled(context)) }
     // #83 - Touch Controls. Same synchronous-read pattern as the toggles
     // above; HypseusActivity reads these same SharedPreferences directly at
     // game-launch time rather than via an Intent extra (see TouchControls.kt).
@@ -416,11 +420,11 @@ private fun HypdroidApp(context: MainActivity) {
         if (options?.touchLightgun == true) {
             args += "-manymouse"
         }
-        // #193 - forces SDL's OpenSL ES audio backend over the default
-        // AAudio (scanned from argv in hypseus.cpp before SDL_Init).
-        // Fixes game-audio crackle/pop seen with AAudio on some devices.
-        if (options?.forceOpenslEs == true) {
-            args += "-openslES"
+        // #195 - Android defaults to SDL's OpenSL ES audio backend now
+        // (hypseus.cpp), which fixes AAudio underrun crackle/pop on some
+        // devices. This global setting opts every game back to AAudio.
+        if (useAAudioEnabled) {
+            args += "-aaudio"
         }
         if (preserveAspectRatioEnabled) {
             args += "-preserve_aspect_ratio"
@@ -691,6 +695,11 @@ private fun HypdroidApp(context: MainActivity) {
                 saveAttractModeEnabled(context, enabled)
                 attractModeEnabled = enabled
             },
+            useAAudioEnabled = useAAudioEnabled,
+            onUseAAudioToggle = { enabled ->
+                saveUseAAudioEnabled(context, enabled)
+                useAAudioEnabled = enabled
+            },
             onBack = { currentScreen = Screen.Settings },
         )
         Screen.About -> AboutScreen(
@@ -771,10 +780,6 @@ private fun HypdroidApp(context: MainActivity) {
                     onTouchLightgunToggle = { enabled ->
                         saveTouchLightgun(context, game.name, enabled)
                         updateGameOptions(game.name, options.copy(touchLightgun = enabled))
-                    },
-                    onAudioDriverToggle = { enabled ->
-                        saveForceOpenslEs(context, game.name, enabled)
-                        updateGameOptions(game.name, options.copy(forceOpenslEs = enabled))
                     },
                     onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
                 )

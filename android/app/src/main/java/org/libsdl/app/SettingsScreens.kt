@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -191,13 +193,18 @@ fun AppSettingsScreen(
     onPreserveAspectRatioToggle: (Boolean) -> Unit,
     attractModeEnabled: Boolean,
     onAttractModeToggle: (Boolean) -> Unit,
+    useAAudioEnabled: Boolean,
+    onUseAAudioToggle: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
 
     var showGlobalCoverArtPicker by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    // #195 - the card rows now overflow a short landscape screen (Retroid),
+    // so the whole screen scrolls. D-pad focus moving to an off-screen
+    // toggle scrolls it into view.
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -331,6 +338,33 @@ fun AppSettingsScreen(
                     }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // #195 - Android defaults to SDL's OpenSL ES audio backend now,
+            // which fixes AAudio underrun crackle/pop on the game audio on
+            // some devices. On: pass -aaudio to switch every game back to
+            // AAudio (see hypseus.cpp / cmdline.cpp).
+            OutlinedCard(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Swap Audio Drivers", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Off: SDL3 OpenSL ES. On: Android AAudio.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        HypdroidSwitch(checked = useAAudioEnabled, onCheckedChange = onUseAAudioToggle)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 
