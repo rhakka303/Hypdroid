@@ -33,6 +33,7 @@ fun GameHackScreen(
     onAspectBezelFixToggle: (Boolean) -> Unit,
     onReduceAttractVideoResolutionToggle: (Boolean) -> Unit,
     onTouchLightgunToggle: (Boolean) -> Unit,
+    onAudioDriverToggle: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -129,7 +130,29 @@ fun GameHackScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.weight(1f))
+
+            // #193 - forces SDL's OpenSL ES audio backend (-openslES, see
+            // cmdline.cpp / hypseus.cpp) instead of the default AAudio.
+            // AAudio crackles/pops on the game audio on some devices;
+            // OpenSL ES does not. Off by default; a game's audio is
+            // unaffected unless this is explicitly turned on.
+            OutlinedCard(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Swap Audio Drivers", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Audio popping or cracking, try OpenSL ES drivers.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        HypdroidSwitch(
+                            checked = options.forceOpenslEs,
+                            onCheckedChange = onAudioDriverToggle,
+                        )
+                    }
+                }
+            }
         }
     }
 }
