@@ -7,6 +7,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -295,8 +296,19 @@ class TouchOverlay(private val activity: Activity) {
         // (thumbstick-click) flank them - the owner's real hypinput_gamepad.ini
         // already binds BUTTON_LEFTSTICK/RIGHTSTICK (KEY_SERVICE/KEY_QUIT on
         // the physical Retroid), which touch otherwise has no way to reach.
-        val centerRow = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
-        val stickButtonSizePx = shoulderHeightPx
+        val centerRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            // L3/R3 are taller than the pills (#196) - keep the row vertically
+            // centered so the pills don't top-align against the taller circles.
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        // #196 - L3/R3 were shoulderHeightPx (== pill height), too small for
+        // "L3"/"R3" to read; enlarge them (may sit slightly taller than the
+        // pills, that's fine). SELECT/START pills were shoulderWidthPx, which
+        // clipped "SELECT" and squished pill_b's 2.5:1 art - widen to a
+        // dedicated value that keeps both pills the same width.
+        val stickButtonSizePx = (0.105f * min(metrics.widthPixels, metrics.heightPixels)).toInt()
+        val centerPillWidthPx = (0.19f * min(metrics.widthPixels, metrics.heightPixels)).toInt()
         val l3 = plainCircleButton("L3", opacityAlpha, R.drawable.hypdroid_touch_stick_cap_b)
         val select = plainButton("SELECT", opacityAlpha, R.drawable.hypdroid_touch_pill_b)
         val start = plainButton("START", opacityAlpha, R.drawable.hypdroid_touch_pill_b)
@@ -304,13 +316,13 @@ class TouchOverlay(private val activity: Activity) {
         centerRow.addView(l3, LinearLayout.LayoutParams(stickButtonSizePx, stickButtonSizePx))
         centerRow.addView(
             select,
-            LinearLayout.LayoutParams(shoulderWidthPx, shoulderHeightPx).apply {
+            LinearLayout.LayoutParams(centerPillWidthPx, shoulderHeightPx).apply {
                 marginStart = (16 * density).toInt()
             },
         )
         centerRow.addView(
             start,
-            LinearLayout.LayoutParams(shoulderWidthPx, shoulderHeightPx).apply {
+            LinearLayout.LayoutParams(centerPillWidthPx, shoulderHeightPx).apply {
                 marginStart = (16 * density).toInt()
             },
         )
@@ -363,6 +375,12 @@ class TouchOverlay(private val activity: Activity) {
         return Button(activity).apply {
             text = label
             textSize = 16f
+            // Button's default horizontal padding + minWidth eat the label
+            // area on a small round target ("L3" clipped to "L") - drop both
+            // so the text is bounded only by the view's own size (#196).
+            setPadding(0, 0, 0, 0)
+            minimumWidth = 0
+            minimumHeight = 0
             background = themedDrawable(assetRes)?.apply { mutate().alpha = alpha }
                 ?: GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
@@ -375,6 +393,11 @@ class TouchOverlay(private val activity: Activity) {
     private fun plainButton(label: String, alpha: Int, assetRes: Int? = null): Button {
         return Button(activity).apply {
             text = label
+            // Same as plainCircleButton: default padding/minWidth truncate the
+            // label ("SELECT" -> "SELEC") - drop them (#196).
+            setPadding(0, 0, 0, 0)
+            minimumWidth = 0
+            minimumHeight = 0
             background = themedDrawable(assetRes)?.apply { mutate().alpha = alpha }
                 ?: GradientDrawable().apply { setColor(Color.argb(alpha, 40, 40, 40)) }
             setTextColor(Color.argb(alpha, 255, 255, 255))
@@ -401,7 +424,11 @@ class TouchOverlay(private val activity: Activity) {
             simulatedColor = Color.argb(alpha, 125, 125, 125),
             textColor = Color.argb(alpha, 255, 255, 255),
             backgroundColor = Color.argb((alpha * 50 / 125), 125, 125, 125),
-            lightColor = Color.argb((alpha * 30 / 125), 125, 125, 125),
+            // #196 - lightColor is used only for the D-pad's diagonal
+            // indicator dots (RadialGamePad CompositeButtonPaint). Off-white
+            // - brighter than the old faint grey, softer than pure white,
+            // which read too bright on-device.
+            lightColor = Color.argb(alpha, 220, 224, 230),
         )
     }
 

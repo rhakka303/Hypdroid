@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Set B round thumbstick-click cap for L3 and R3. Labels remain
+         Android-rendered. Same layered navy shell, icy top-left highlight,
+         and bottom green accent as pill_b / bumper_*_b / trigger_*_b. -->
+    <path
+        android:fillColor="#E20A101B"
+        android:pathData="M48,4 A44,44 0 1,1 48,92 A44,44 0 1,1 48,4 Z"
+        android:strokeColor="#D6E5F6"
+        android:strokeWidth="2.2" />
+    <path
+        android:fillColor="#C9111B2B"
+        android:pathData="M48,12 A36,36 0 1,1 48,84 A36,36 0 1,1 48,12 Z"
+        android:strokeColor="#708AA8"
+        android:strokeWidth="1.6" />
+    <path
+        android:fillColor="#491B2A3C"
+        android:pathData="M48,20 A28,28 0 1,1 48,76 A28,28 0 1,1 48,20 Z"
+        android:strokeColor="#435A75"
+        android:strokeWidth="1.1" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M14,40 A40,40 0 0,1 68,12"
+        android:strokeColor="#BCE4F1FF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.4" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M31,73 A33,33 0 0,0 65,73"
+        android:strokeColor="#20D477"
+        android:strokeLineCap="round"
+        android:strokeWidth="3.8" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M34,73 A33,33 0 0,0 62,73"
+        android:strokeColor="#7AF4AF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.2" />
+</vector>
