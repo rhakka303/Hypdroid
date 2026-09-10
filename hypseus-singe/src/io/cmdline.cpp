@@ -1541,6 +1541,12 @@ bool parse_cmd_line(int argc, char **argv)
             else if (strcasecmp(s, "-nohwaccel") == 0) {
                 video::set_software_render(true);
             }
+            // Hypdroid per-game "Audio Driver" Game Hack: handled in main()
+            // before SDL_Init (SDL picks its audio backend there, ahead of
+            // this parser). Accept it here so it isn't rejected as unknown.
+            else if (strcasecmp(s, "-openslES") == 0) {
+                // no-op: see hypseus.cpp
+            }
             // check for any game-specific arguments ...
             else if (g_game->handle_cmdline_arg(s)) {
                 // don't do anything in here, it has already been handled by the

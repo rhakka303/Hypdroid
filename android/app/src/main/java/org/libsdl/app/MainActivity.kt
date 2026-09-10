@@ -416,6 +416,12 @@ private fun HypdroidApp(context: MainActivity) {
         if (options?.touchLightgun == true) {
             args += "-manymouse"
         }
+        // #193 - forces SDL's OpenSL ES audio backend over the default
+        // AAudio (scanned from argv in hypseus.cpp before SDL_Init).
+        // Fixes game-audio crackle/pop seen with AAudio on some devices.
+        if (options?.forceOpenslEs == true) {
+            args += "-openslES"
+        }
         if (preserveAspectRatioEnabled) {
             args += "-preserve_aspect_ratio"
         }
@@ -765,6 +771,10 @@ private fun HypdroidApp(context: MainActivity) {
                     onTouchLightgunToggle = { enabled ->
                         saveTouchLightgun(context, game.name, enabled)
                         updateGameOptions(game.name, options.copy(touchLightgun = enabled))
+                    },
+                    onAudioDriverToggle = { enabled ->
+                        saveForceOpenslEs(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(forceOpenslEs = enabled))
                     },
                     onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
                 )
