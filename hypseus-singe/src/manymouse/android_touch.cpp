@@ -49,6 +49,19 @@
  * (see SDL_events.h), so the fix is to synthesize the same two ABSMOTION
  * events from a button event's own coordinates as from a real motion
  * event, not to assume a separate prior motion event already ran.
+ *
+ * #197 - a second real on-device finding: hypseus's own SDL_check_input()
+ * does `while (SDL_PollEvent(&e)) process_event(&e);`, and this driver runs
+ * from inside process_event() - so SDL_PollEvent dequeues (and discards, in
+ * MANY_MOUSE mode) one event per iteration before our SDL_PeepEvents runs.
+ * When the dropped event is the tap's MOUSE_BUTTON_UP, the ManyMouse button
+ * stays latched "down" and a level-triggered automatic weapon keeps firing
+ * until the mag empties. A minimal, additive safety net (see g_trigger_held
+ * below) synthesises the missing release, driven by SDL_GetMouseState()
+ * (authoritative even when the event was eaten) plus a raw
+ * FINGER_UP/_CANCELED peek. Existing mouse-event handling is unchanged;
+ * single-shot (down-edge) games are unaffected since the net only ever
+ * releases, never presses.
  */
 
 #include "manymouse.h"
@@ -59,6 +72,35 @@
 #include "../video/video.h"
 
 static bool g_initialized = false;
+
+// #197 - lost-release safety net. In MANY_MOUSE mode hypseus's own
+// SDL_check_input() does `while (SDL_PollEvent(&e)) process_event(&e);`,
+// and manymouse_update_mice() runs *inside* process_event() - so
+// SDL_PollEvent dequeues (and, for a mouse event in MANY_MOUSE mode,
+// discards via `default:`) one event per iteration before this driver's
+// SDL_PeepEvents ever runs. If the MOUSE_BUTTON_UP for a tap is the event
+// SDL_PollEvent grabbed, this driver never sees it, the ManyMouse button
+// stays latched "down", and a level-triggered automatic weapon keeps
+// firing until the mag empties.
+//
+// SDL updates its own internal button state on every pump regardless of
+// who consumes the event, so SDL_GetMouseState() is authoritative even
+// when the UP was eaten. Each poll, if we think a trigger is held but
+// SDL_GetMouseState() shows that button released, synthesise the release.
+// Second signal: raw SDL_EVENT_FINGER_UP / _CANCELED - Android can send
+// CANCELED instead of UP when a tap slides slightly, and SDL may then not
+// synthesise a mouse-up at all, so GetMouseState alone would miss it.
+// Both paths only ever *release*, never press, so single-shot (down-edge)
+// games are unaffected.
+static bool g_trigger_held = false;
+static unsigned int g_held_item = 0;
+
+static SDL_MouseButtonFlags item_mask(unsigned int item)
+{
+    if (item == 1) return SDL_BUTTON_MMASK;
+    if (item == 2) return SDL_BUTTON_RMASK;
+    return SDL_BUTTON_LMASK;
+}
 
 // Up to 3 ManyMouseEvents can come out of a single dequeued SDL event (an
 // X move, a Y move, and - for a button event - the button itself), but
@@ -125,6 +167,8 @@ static int android_touch_init(const unsigned char filter)
     g_initialized = true;
     g_pending_count = 0;
     g_pending_head = 0;
+    g_trigger_held = false;
+    g_held_item = 0;
     return 1; // exactly one virtual device: the touchscreen/pointer itself.
 }
 
@@ -132,6 +176,7 @@ static void android_touch_quit(void)
 {
     g_initialized = false;
     g_pending_count = 0;
+    g_trigger_held = false;
 }
 
 static const char *android_touch_name(unsigned int index)
@@ -143,6 +188,44 @@ static int android_touch_poll(ManyMouseEvent *ev)
 {
     if (!g_initialized)
         return 0;
+
+    // #197 - lost-release safety net (see notes above). Runs only while the
+    // FIFO is idle so it can't interleave with a real event's ABSMOTION
+    // pair. Only ever releases - never presses.
+    if (g_trigger_held && g_pending_count == 0)
+    {
+        bool release = false;
+
+        // (a) SDL's own button state disagrees - the UP was eaten by
+        // SDL_check_input()'s SDL_PollEvent before we ran.
+        if ((SDL_GetMouseState(NULL, NULL) & item_mask(g_held_item)) == 0)
+        {
+            release = true;
+        }
+        else
+        {
+            // (b) a raw FINGER_UP / _CANCELED (Android sent CANCELED, or
+            // SDL never synthesised the mouse-up). Nothing else in hypseus
+            // consumes SDL finger events, so GETEVENT is safe.
+            SDL_Event fev;
+            while (SDL_PeepEvents(&fev, 1, SDL_GETEVENT,
+                                  SDL_EVENT_FINGER_DOWN, SDL_EVENT_FINGER_CANCELED) > 0)
+            {
+                if (fev.type == SDL_EVENT_FINGER_UP ||
+                    fev.type == SDL_EVENT_FINGER_CANCELED)
+                {
+                    release = true;
+                    break;
+                }
+            }
+        }
+
+        if (release)
+        {
+            push_pending(MANYMOUSE_EVENT_BUTTON, g_held_item, 0, 0, 0);
+            g_trigger_held = false;
+        }
+    }
 
     if (pop_pending(ev))
         return 1;
@@ -177,6 +260,14 @@ static int android_touch_poll(ManyMouseEvent *ev)
         else if (sdl_ev.button.button == SDL_BUTTON_RIGHT) item = 2;
 
         push_pending(MANYMOUSE_EVENT_BUTTON, item, sdl_ev.button.down ? 1 : 0, 0, 0);
+
+        // #197 - track what we last told ManyMouse so the safety net above
+        // knows a trigger is (believed) held. Any button source is fine to
+        // track: the net compares against SDL_GetMouseState(), which stays
+        // correct for a real mouse held for auto-fire, so it self-corrects.
+        if (sdl_ev.button.down) { g_trigger_held = true; g_held_item = item; }
+        else                    { g_trigger_held = false; }
+
         return pop_pending(ev) ? 1 : 0;
     }
     default:
