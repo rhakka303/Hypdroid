@@ -56,5 +56,6 @@ fun scanGames(homeDir: File): List<Game> {
         }
     }
 
-    return games.sortedBy { it.name }
+    // A plain sortedBy { it.name } puts every capitalized name before every lowercase one.
+    return games.sortedWith(compareBy<Game> { it.name.lowercase() }.thenBy { it.name })
 }
