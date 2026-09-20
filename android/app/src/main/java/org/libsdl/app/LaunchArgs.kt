@@ -50,6 +50,8 @@ fun buildLaunchArgs(game: Game, homeDir: String): Array<String> {
             args += "singe"
             args += "vldp"
             args += listOf("-framefile", game.framefilePath, "-zlua", game.romOrScriptPath)
+            // A pack game's script is <altScript>.singe in the shared zip, not <zipname>.singe.
+            game.altScript?.let { args += listOf("-usealt", it) }
         }
         GameCategory.SINGE_SCRIPT -> {
             args += "singe"
