@@ -414,6 +414,12 @@ private fun HypdroidApp(context: MainActivity) {
         if (options?.aspectBezelFix == true) {
             args += "-aspectbezelfix"
         }
+        // #205 - real hypseus CLI flag (cmdline.cpp): the Bezel HUD - beacons,
+        // D-pad and Action buttons in the pillarbox bars, images from
+        // pics/lights/. Only draws for a game that sets AllowBezelLights = true.
+        if (options?.bezelLights == true) {
+            args += "-bezelhud"
+        }
         // #185 - real hypseus CLI flag (cmdline.cpp), not a Hypdroid
         // invention. Confirmed on real hardware to be what makes
         // tap-to-aim/tap-to-shoot work at all.
@@ -823,6 +829,10 @@ private fun HypdroidApp(context: MainActivity) {
                     onOverlayBezelToggle = { enabled ->
                         saveOverlayBezel(context, game.name, enabled)
                         updateGameOptions(game.name, options.copy(overlayBezel = enabled))
+                    },
+                    onBezelLightsToggle = { enabled ->
+                        saveBezelLights(context, game.name, enabled)
+                        updateGameOptions(game.name, options.copy(bezelLights = enabled))
                     },
                     onBack = { currentScreen = Screen.GameOptionsFor(game.name) },
                 )

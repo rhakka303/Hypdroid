@@ -1840,9 +1840,28 @@ void process_joystick_hat_motion(SDL_Event *event)
     }
 }
 
+// Bezel lights: which switches are currently held (bit per SWITCH_*)
+static Uint32 g_held_switches = 0;
+
+bool input_is_held(Uint8 move)
+{
+    return (move < 32) && (g_held_switches & (1u << move));
+}
+
+// for game drivers that take input without going through input_enable()
+// (Singe's own keyboard handling calls singe::input_enable directly)
+void input_set_held(Uint8 move, bool held)
+{
+    if (move >= 32) return;
+    if (held) g_held_switches |= (1u << move);
+    else g_held_switches &= ~(1u << move);
+}
+
 // if user has pressed a key/moved the joystick/pressed a button
 void input_enable(Uint8 move, Sint8 mouseID)
 {
+    if (move < 32) g_held_switches |= (1u << move);
+
     // first test universal input, then pass unknown input on to the game driver
 
     switch (move)
@@ -1889,6 +1908,8 @@ void input_enable(Uint8 move, Sint8 mouseID)
 // position
 void input_disable(Uint8 move, Sint8 mouseID)
 {
+    if (move < 32) g_held_switches &= ~(1u << move);
+
     if (move == SWITCH_PAUSE && thisGame == GAME_SINGE)
         g_game->input_disable(move, mouseID);
 

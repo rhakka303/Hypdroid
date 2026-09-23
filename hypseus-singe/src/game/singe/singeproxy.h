@@ -309,6 +309,7 @@ static int sep_bezel_second_score(lua_State *L);
 static int sep_bezel_player_score(lua_State *L);
 static int sep_bezel_player_lives(lua_State *L);
 static int sep_bezel_is_enabled(lua_State *L);
+static int sep_beacon_flash(lua_State *L);
 static int sep_pseudo_audio_call(lua_State *L);
 static int sep_invalid_api_call(lua_State *L);
 static int sep_lua_rewrite(lua_State *L);

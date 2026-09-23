@@ -40,6 +40,11 @@ data class GameOptions(
     // work at all. Off by default, same convention as every other Game
     // Hack toggle in this app.
     val touchLightgun: Boolean = false,
+    // #205 - Bezel HUD: passes hypseus's "-bezelhud" (cmdline.cpp), which
+    // draws the warning beacons, D-pad and Action buttons in the pillarbox
+    // bars (images from pics/lights/), for games that set
+    // AllowBezelLights = true. Off by default.
+    val bezelLights: Boolean = false,
 )
 
 private const val GAME_OPTIONS_PREFS = "hypdroid_game_options"
@@ -52,6 +57,7 @@ private fun overlayBezelKey(gameName: String) = "overlaybezel_$gameName"
 private fun aspectBezelFixKey(gameName: String) = "aspectbezelfix_$gameName"
 private fun reduceAttractVideoResolutionKey(gameName: String) = "reduce_attract_video_res_$gameName"
 private fun touchLightgunKey(gameName: String) = "touch_lightgun_$gameName"
+private fun bezelLightsKey(gameName: String) = "bezel_lights_$gameName"
 
 fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val prefs = context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
@@ -71,6 +77,7 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
     val aspectBezelFix = prefs.getBoolean(aspectBezelFixKey(gameName), false)
     val reduceAttractVideoResolution = prefs.getBoolean(reduceAttractVideoResolutionKey(gameName), false)
     val touchLightgun = prefs.getBoolean(touchLightgunKey(gameName), false)
+    val bezelLights = prefs.getBoolean(bezelLightsKey(gameName), false)
     return GameOptions(
         coverArt,
         bezelEnabled,
@@ -80,7 +87,15 @@ fun loadGameOptions(context: Context, gameName: String): GameOptions {
         aspectBezelFix,
         reduceAttractVideoResolution,
         touchLightgun,
+        bezelLights,
     )
+}
+
+fun saveBezelLights(context: Context, gameName: String, enabled: Boolean) {
+    context.getSharedPreferences(GAME_OPTIONS_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(bezelLightsKey(gameName), enabled)
+        .apply()
 }
 
 fun saveCoverArt(context: Context, gameName: String, coverArt: CoverArtType) {

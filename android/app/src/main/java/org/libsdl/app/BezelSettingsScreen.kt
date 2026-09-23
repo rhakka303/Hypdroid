@@ -37,6 +37,7 @@ fun BezelSettingsScreen(
     onBezelToggle: (Boolean) -> Unit,
     onScorebezelAutofitToggle: (Boolean) -> Unit,
     onOverlayBezelToggle: (Boolean) -> Unit,
+    onBezelLightsToggle: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -129,6 +130,39 @@ fun BezelSettingsScreen(
                     }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // #205 - Bezel HUD: warning beacons, D-pad and Action buttons
+        // drawn in the pillarbox bars. Independent of Bezel above - it draws
+        // with or without bezel art, and only when the game has bars.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedCard(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Bezel HUD", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (options.bezelLights) "On" else "Off",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                "Beacons, D-pad and buttons in the side bars",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        HypdroidSwitch(
+                            checked = options.bezelLights,
+                            onCheckedChange = onBezelLightsToggle,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }
