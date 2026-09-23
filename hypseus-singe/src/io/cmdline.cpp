@@ -1321,6 +1321,11 @@ bool parse_cmd_line(int argc, char **argv)
                 result = path;
                 if (path) video::set_bezel_path(s);
             }
+            // Bezel HUD: beacons, D-pad and buttons in the pillarbox bars
+            // (images from pics/lights/)
+            else if (strcasecmp(s, "-bezelhud") == 0) {
+                video::set_bezel_lights(true);
+            }
             // by DBX - This switches logical axis calculations
             else if (strcasecmp(s, "-vertical_screen") == 0) {
                 video::set_vertical_orientation(true);

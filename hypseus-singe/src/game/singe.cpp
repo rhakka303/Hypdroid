@@ -330,6 +330,9 @@ void singe::shutdown()
 
 void singe::input_enable(Uint8 input, Sint8 mouseID)
 {
+    // bezel lights: keyboard input reaches here without input_enable()
+    if (i_keyboard_mode == KEYBD_NORMAL) input_set_held(input, true);
+
     if (singe_joymouse)
     {
         switch (input)
@@ -359,6 +362,8 @@ void singe::input_enable(Uint8 input, Sint8 mouseID)
 
 void singe::input_disable(Uint8 input, Sint8 mouseID)
 {
+    if (i_keyboard_mode == KEYBD_NORMAL) input_set_held(input, false);
+
     if (singe_joymouse)
     {
         switch (input)

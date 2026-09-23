@@ -27,6 +27,7 @@
 #include "../io/error.h"
 #include "../io/mpo_fileio.h"
 #include "../io/mpo_mem.h"
+#include "../io/input.h"
 #include "icon.h"
 #include "video.h"
 #include <SDL3_image/SDL_image.h>
@@ -223,9 +224,188 @@ static uint64_t calcHash(const void* data, size_t size)
     return hash;
 }
 
+// ---------------------------------------------------------------------------
+// Bezel HUD (-bezelhud)
+//
+// Smoked-glass fixtures drawn in the pillarbox bars: two beacons (top left and
+// right) that flash when a Singe game calls singeBeaconFlash(), a D-pad (bottom
+// left) and Action 1/2 buttons (bottom right) that light while held.
+// Each fixture is a "glass" PNG (unlit look) with a "light" PNG (lit look, cut
+// to the lens) faded in on top; the light's alpha sets the brightness, so one
+// pair of images covers off/dim/full/flash.
+// Images are loaded from pics/lights/ (next to the scoreboard graphics).
+// The layout is designed on a
+// 1920x1080 screen with 240px bars and scales to the real bar size.
+// ---------------------------------------------------------------------------
+enum { BL_BEACON, BL_RED, BL_BLUE, BL_UP, BL_DOWN, BL_LEFT, BL_RIGHT, BL_COUNT };
+enum { BG_BEACON, BG_RED, BG_BLUE, BG_DPAD, BG_COUNT };
+
+static const char *g_bl_light_file[BL_COUNT] = {
+    "beacon_light.png", "button_red_light.png", "button_blue_light.png",
+    "dpad_light_up.png", "dpad_light_down.png", "dpad_light_left.png", "dpad_light_right.png" };
+static const char *g_bl_glass_file[BG_COUNT] = {
+    "beacon_glass.png", "button_red_glass.png", "button_blue_glass.png", "dpad_glass.png" };
+
+static bool g_bl_enabled = false;
+static bool g_bl_game = false;              // game opted in (AllowBezelLights = true)
+static bool g_bl_loaded = false;
+static Uint64 g_bl_flash_start = 0;
+static bool g_bl_hold = false;              // keep flashing until switched off
+static SDL_Texture *g_bl_light[BL_COUNT] = {NULL};
+static SDL_Texture *g_bl_glass[BG_COUNT] = {NULL};
+
+static const Uint64 BL_FLASH_MS = 1500;     // how long the beacons flash
+static const Uint64 BL_PULSE_MS = 500;      // one on/off pulse (3 pulses)
+static const Uint64 BL_HOLD_MAX_MS = 30000; // a held flash stops by itself after 30s
+
+static SDL_Texture *bl_load(const char *file)
+{
+    // same place as the scoreboard/annunciator graphics (pics/)
+    std::string path = fmt("pics/lights/%s", file);
+    SDL_Texture *t = IMG_LoadTexture(g_renderer, path.c_str());
+
+    if (!t)
+    {
+        LOGW << fmt("Bezel HUD: failed to load %s", path.c_str());
+        return NULL;
+    }
+
+    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(t, SDL_SCALEMODE_LINEAR);
+    return t;
+}
+
+static void bl_unload()
+{
+    for (int i = 0; i < BL_COUNT; i++) { SDL_DestroyTexture(g_bl_light[i]); g_bl_light[i] = NULL; }
+    for (int i = 0; i < BG_COUNT; i++) { SDL_DestroyTexture(g_bl_glass[i]); g_bl_glass[i] = NULL; }
+    g_bl_loaded = false;
+}
+
+static void bl_load_all()
+{
+    for (int i = 0; i < BL_COUNT; i++) g_bl_light[i] = bl_load(g_bl_light_file[i]);
+    for (int i = 0; i < BG_COUNT; i++) g_bl_glass[i] = bl_load(g_bl_glass_file[i]);
+    g_bl_loaded = true;
+    LOGI << "Bezel HUD: loaded from pics/lights";
+}
+
+// place a fixture from the 1920x1080 design: x/y/w in design pixels,
+// right/bottom anchor it to that edge of the screen instead of the left/top
+static SDL_FRect bl_rect(SDL_Texture *t, float x, float y, float w,
+                         bool right, bool bottom, float s)
+{
+    float tw = 1, th = 1;
+    if (t) SDL_GetTextureSize(t, &tw, &th);
+
+    SDL_FRect r;
+    r.w = w * s;
+    r.h = r.w * (th / tw);
+    r.x = right  ? g_logical_rect.w - (1920.0f - x) * s : x * s;
+    r.y = bottom ? g_logical_rect.h - (1080.0f - y) * s : y * s;
+    return r;
+}
+
+// glass = the fixture as it looks unlit; light = the lit look, cut to the lens,
+// faded in on top so level 0 shows the unlit fixture and 255 the fully lit one
+static void bl_draw(SDL_Texture *light, SDL_Texture *glass, SDL_FRect r, Uint8 level)
+{
+    if (glass) SDL_RenderTexture(g_renderer, glass, NULL, &r);
+    if (light && level)
+    {
+        SDL_SetTextureAlphaMod(light, level);
+        SDL_RenderTexture(g_renderer, light, NULL, &r);
+    }
+}
+
+static void vid_render_lights()
+{
+    if (!g_bl_loaded) bl_load_all();
+
+    // the bars either side of the game picture; nothing to draw without them
+    float left_bar  = (float)g_scaling_rect.x;
+    float right_bar = (float)(g_logical_rect.w - (g_scaling_rect.x + g_scaling_rect.w));
+    float bar = (left_bar < right_bar) ? left_bar : right_bar;
+    if (bar < 8.0f) return;
+
+    float s = g_logical_rect.h / 1080.0f;
+    if (bar / 240.0f < s) s = bar / 240.0f;   // shrink to fit narrower bars
+
+    // beacon flash: three smooth pulses after singeBeaconFlash(), or keeps
+    // pulsing while held on with singeBeaconFlash(true) (e.g. a death scene)
+    Uint8 beacon = 0;
+    if (g_bl_flash_start)
+    {
+        Uint64 t = SDL_GetTicks() - g_bl_flash_start;
+        if (g_bl_hold && t >= BL_HOLD_MAX_MS) g_bl_hold = false;   // safety: never stuck on
+
+        if (g_bl_hold || t < BL_FLASH_MS)
+        {
+            double phase = (double)(t % BL_PULSE_MS) / BL_PULSE_MS;
+            beacon = (Uint8)(255.0 * (0.5 - 0.5 * SDL_cos(phase * 2.0 * SDL_PI_D)));
+        }
+        else g_bl_flash_start = 0;
+    }
+
+    SDL_Texture *bg = g_bl_glass[BG_BEACON];
+    bl_draw(g_bl_light[BL_BEACON], bg, bl_rect(bg, 30, 30, 180, false, false, s), beacon);
+    bl_draw(g_bl_light[BL_BEACON], bg, bl_rect(bg, 1710, 30, 180, true, false, s), beacon);
+
+    // Action buttons, bottom right
+    bl_draw(g_bl_light[BL_RED], g_bl_glass[BG_RED],
+            bl_rect(g_bl_glass[BG_RED], 1695, 910, 100, true, true, s),
+            input_is_held(SWITCH_BUTTON1) ? 255 : 0);
+    bl_draw(g_bl_light[BL_BLUE], g_bl_glass[BG_BLUE],
+            bl_rect(g_bl_glass[BG_BLUE], 1805, 910, 100, true, true, s),
+            input_is_held(SWITCH_BUTTON2) ? 255 : 0);
+
+    // D-pad, bottom left: each arm's light shares the glass rectangle
+    SDL_FRect dr = bl_rect(g_bl_glass[BG_DPAD], 20, 840, 200, false, true, s);
+    const int arm[4] = { BL_UP, BL_DOWN, BL_LEFT, BL_RIGHT };
+    const Uint8 sw[4] = { SWITCH_UP, SWITCH_DOWN, SWITCH_LEFT, SWITCH_RIGHT };
+    bl_draw(NULL, g_bl_glass[BG_DPAD], dr, 0);
+    for (int i = 0; i < 4; i++)
+        if (input_is_held(sw[i])) bl_draw(g_bl_light[arm[i]], NULL, dr, 255);
+}
+
+void set_bezel_lights(bool bEnabled) { g_bl_enabled = bEnabled; }
+
+// fail-safe: the game must opt in with AllowBezelLights = true, otherwise
+// -bezelhud draws nothing at all (no beacons, D-pad or buttons)
+void set_bezel_lights_game(bool bAllowed)
+{
+    g_bl_game = bAllowed;
+    if (g_bl_enabled)
+        LOGI << (bAllowed ? "Bezel HUD: on (game sets AllowBezelLights = true)"
+                          : "Bezel HUD: off (game does not set AllowBezelLights = true)");
+}
+
+void bezel_lights_flash()
+{
+    g_bl_flash_start = SDL_GetTicks();
+    if (!g_bl_flash_start) g_bl_flash_start = 1;
+}
+
+// hold the beacons flashing until switched off (keeps the pulse going if
+// already flashing, so a short flash flows straight into a held one)
+void bezel_lights_hold(bool on)
+{
+    if (on)
+    {
+        if (!g_bl_flash_start) bezel_lights_flash();
+        g_bl_hold = true;
+    }
+    else
+    {
+        g_bl_hold = false;
+        g_bl_flash_start = 0;
+    }
+}
+
 static void resize_cleanup()
 {
     VIDEO_CLEAR(BEZEL_LOAD);
+    bl_unload();
 
     SDL_DestroySurface(g_overlay_surface);
     SDL_DestroySurface(g_aux_blit_surface);
@@ -972,6 +1152,8 @@ bool deinit_display()
     SDL_DestroyTexture(g_bezel_texture);
 
     SDL_DestroyTexture(g_aux_texture);
+
+    bl_unload();
 
     for (int i = 0; i < 2; ++i)
     {
@@ -2796,6 +2978,8 @@ void vid_blit()
     }
 
     if (VIDEO_HAS(BEZEL_TOGGLE)) vid_render_bezels();
+
+    if (g_bl_enabled && g_bl_game) vid_render_lights();
 
     if (VIDEO_HAS(TAKE_SCREENSHOT))
     {

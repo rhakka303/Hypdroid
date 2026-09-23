@@ -37,21 +37,34 @@ private val INTERNAL_ASSET_DIRS = listOf("pics", "fonts", "sound", "midi")
  * Copies hypseus's bundled common assets into internal storage, skipping
  * anything already present - cheap to call on every folder pick, not just
  * the first one.
+ *
+ * #205: copies subfolders too (pics/lights/ holds the bezel light images).
+ * AssetManager.list() returns subfolder names alongside file names, so the old
+ * flat loop tried to open "lights" as a file. Each file is checked on its own
+ * instead of comparing a folder's file count, so an in-place upgrade that adds
+ * new files (or a whole new subfolder) gets them without a reinstall.
  */
 fun ensureHypseusAssets(context: Context) {
-    val assetManager = context.assets
-
     for (dirName in INTERNAL_ASSET_DIRS) {
-        val destDir = File(context.filesDir, dirName)
-        val files = assetManager.list("hypseus/$dirName") ?: continue
-        if (destDir.exists() && destDir.listFiles()?.size == files.size) continue
-        destDir.mkdirs()
-        for (fileName in files) {
-            val destFile = File(destDir, fileName)
-            if (destFile.exists()) continue
-            assetManager.open("hypseus/$dirName/$fileName").use { input ->
-                destFile.outputStream().use { output -> input.copyTo(output) }
-            }
+        copyAssetDir(context, "hypseus/$dirName", File(context.filesDir, dirName))
+    }
+}
+
+private fun copyAssetDir(context: Context, assetPath: String, destDir: File) {
+    val assetManager = context.assets
+    val entries = assetManager.list(assetPath) ?: return
+    destDir.mkdirs()
+    for (name in entries) {
+        val childPath = "$assetPath/$name"
+        // a folder lists its own entries; a file lists none
+        if (!assetManager.list(childPath).isNullOrEmpty()) {
+            copyAssetDir(context, childPath, File(destDir, name))
+            continue
+        }
+        val destFile = File(destDir, name)
+        if (destFile.exists()) continue
+        assetManager.open(childPath).use { input ->
+            destFile.outputStream().use { output -> input.copyTo(output) }
         }
     }
 }

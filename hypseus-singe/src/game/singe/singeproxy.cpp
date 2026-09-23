@@ -1794,6 +1794,7 @@ void sep_startup(const char *data)
     lua_register(g_se_lua_context, "scoreBezelLives",        sep_bezel_player_lives);
     lua_register(g_se_lua_context, "scoreBezelGetState",     sep_bezel_is_enabled);
     lua_register(g_se_lua_context, "controllerDoRumble",     sep_controller_rumble);
+    lua_register(g_se_lua_context, "singeBeaconFlash",       sep_beacon_flash);
     lua_register(g_se_lua_context, "controllerIsValid",      sep_controller_valid);
     lua_register(g_se_lua_context, "joyMouseEnable",         sep_joymouse_enable);
 
@@ -1914,6 +1915,13 @@ void sep_startup(const char *data)
         if (luaL_dofile(g_se_lua_context, data) != 0)
             sep_lua_failure(g_se_lua_context, NULL);
     }
+
+    // Bezel HUD fail-safe: -bezelhud only does anything for a game
+    // whose script sets AllowBezelLights = true (a real boolean true).
+    lua_getglobal(g_se_lua_context, "AllowBezelLights");
+    video::set_bezel_lights_game(lua_isboolean(g_se_lua_context, -1) &&
+                                 lua_toboolean(g_se_lua_context, -1));
+    lua_pop(g_se_lua_context, 1);
 }
 
 void sep_rom_compressed(void)
@@ -5124,6 +5132,19 @@ static int sep_bezel_enable(lua_State *L)
                 }
         }
 
+    return 0;
+}
+
+// Bezel lights: flash the beacons. Harmless without -bezelhud.
+//   singeBeaconFlash()       short flash (wrong move)
+//   singeBeaconFlash(true)   keep flashing until...
+//   singeBeaconFlash(false)  ...stopped (e.g. for the length of a death scene)
+static int sep_beacon_flash(lua_State *L)
+{
+    if (lua_gettop(L) >= 1 && lua_isboolean(L, 1))
+        video::bezel_lights_hold(lua_toboolean(L, 1));
+    else
+        video::bezel_lights_flash();
     return 0;
 }
 

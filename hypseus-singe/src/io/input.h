@@ -99,6 +99,8 @@ void process_controller_motion(SDL_Event *event);
 void process_joystick_hat_motion(SDL_Event *event);
 void input_enable(Uint8, Sint8);
 void input_disable(Uint8, Sint8);
+bool input_is_held(Uint8);
+void input_set_held(Uint8, bool);
 inline void add_coin_to_queue(bool enabled, Uint8 val);
 void reset_idle(void); // added by JFA
 void set_use_joystick(bool val);
