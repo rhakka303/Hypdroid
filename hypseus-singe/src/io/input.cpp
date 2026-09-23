@@ -302,6 +302,56 @@ static int connectedGamepads()
     return count;
 }
 
+#ifdef __ANDROID__
+// Hypdroid (#207): many handhelds' built-in controls report no rumble motor
+// (e.g. the Retroid Pocket 5's "Retroid Pocket Controller"), so
+// SDL_RumbleGamepad() fails and rumble was silently dropped. SDL3's Android
+// backend exposes the device's own system vibrator as a haptic device named
+// "VIBRATOR_SERVICE" (SDLHapticHandler) - rumble goes there instead. Opened
+// once, on first use; a device with no vibrator just stays silent as before.
+static SDL_Haptic *g_device_haptic = NULL;
+static bool g_device_haptic_tried = false;
+
+static SDL_Haptic *device_haptic()
+{
+    if (g_device_haptic_tried) return g_device_haptic;
+    g_device_haptic_tried = true;
+
+    int count = 0;
+    SDL_HapticID *ids = SDL_GetHaptics(&count);
+    for (int i = 0; ids && i < count && !g_device_haptic; i++)
+    {
+        const char *name = SDL_GetHapticNameForID(ids[i]);
+        if (name && SDL_strcmp(name, "VIBRATOR_SERVICE") == 0)
+        {
+            g_device_haptic = SDL_OpenHaptic(ids[i]);
+            if (g_device_haptic && !SDL_InitHapticRumble(g_device_haptic))
+            {
+                SDL_CloseHaptic(g_device_haptic);
+                g_device_haptic = NULL;
+            }
+        }
+    }
+    SDL_free(ids);
+
+    LOGI << (g_device_haptic ? "Rumble: controller has no motor, using the device vibrator"
+                             : "Rumble: no device vibrator available");
+    return g_device_haptic;
+}
+
+// A handheld's own motor needs time to spin up: on the Retroid Pocket 5 a
+// 150ms buzz (hypseus's -haptic length) can't be felt, 400ms can.
+static const Uint32 DEVICE_RUMBLE_MIN_MS = 400;
+
+static void device_rumble(Uint16 strength, Uint32 ms)
+{
+    if (!strength) return;
+    SDL_Haptic *h = device_haptic();
+    if (h) SDL_PlayHapticRumble(h, strength / 65535.0f,
+                                ms < DEVICE_RUMBLE_MIN_MS ? DEVICE_RUMBLE_MIN_MS : ms);
+}
+#endif
+
 static void doRumble(int slot)
 {
     if (slot < 0 || slot >= MAX_GAMECONTROLLER)
@@ -309,11 +359,16 @@ static void doRumble(int slot)
 
     ControllerSlot& gp = g_controllers[slot];
 
-    if (!gp.gamepad || !gp.haptic)
+    if (!gp.gamepad)
         return;
 
-    if (!SDL_RumbleGamepad(gp.gamepad, g_haptic[0], g_haptic[0], g_haptic[1]))
-        gp.haptic = false;
+    if (gp.haptic && SDL_RumbleGamepad(gp.gamepad, g_haptic[0], g_haptic[0], g_haptic[1]))
+        return;
+
+    gp.haptic = false;
+#ifdef __ANDROID__
+    device_rumble(g_haptic[0], g_haptic[1]);
+#endif
 }
 
 static int safe_id(int id)
@@ -1175,6 +1230,12 @@ void SDL_input_shutdown(void)
 
         g_controllers[i] = {};
     }
+
+#ifdef __ANDROID__
+    if (g_device_haptic) SDL_CloseHaptic(g_device_haptic);
+    g_device_haptic = NULL;
+    g_device_haptic_tried = false;
+#endif
 }
 
 // checks to see if there is incoming input, and acts on it
@@ -2054,7 +2115,7 @@ void do_gamepad_rumble(Uint8 str, Uint8 len, Uint8 player)
     {
         ControllerSlot& gp = g_controllers[i];
 
-        if (!gp.gamepad || !gp.haptic)
+        if (!gp.gamepad)
             continue;
 
         if (gp.player != player)
@@ -2062,9 +2123,13 @@ void do_gamepad_rumble(Uint8 str, Uint8 len, Uint8 player)
 
         Uint16 s = (Uint16)((65535u * str) / 4);
 
-        if (!SDL_RumbleGamepad(gp.gamepad, s, s, (0x4b << len)))
-            gp.haptic = false;
+        if (gp.haptic && SDL_RumbleGamepad(gp.gamepad, s, s, (0x4b << len)))
+            return;
 
+        gp.haptic = false;
+#ifdef __ANDROID__
+        device_rumble(s, (Uint32)(0x4b << len));   // #207: no controller motor
+#endif
         return;
     }
 }
