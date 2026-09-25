@@ -48,12 +48,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -920,6 +922,27 @@ private fun HomeScreen(
         }
     }
 
+    // #209 - Sort picker: where each letter's first game is, whether the
+    // picker is open, and a pending jump for GameCarousel to carry out (it
+    // owns the pager state). Cleared once handled, so coming back to this
+    // screen never replays an old jump.
+    val jumpTargets = remember(games) { letterJumpTargets(games) }
+    var showLetterPicker by remember { mutableStateOf(false) }
+    var jumpRequest by remember { mutableStateOf<Int?>(null) }
+    val showSort = !pathResolutionFailed && gameFolderPath != null && games.isNotEmpty()
+
+    if (showLetterPicker) {
+        LetterPickerDialog(
+            current = letterEntryFor(focusedGame?.name ?: ""),
+            targets = jumpTargets,
+            onSelect = { entry ->
+                showLetterPicker = false
+                jumpRequest = jumpTargets[entry]
+            },
+            onDismiss = { showLetterPicker = false },
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (backgroundFile != null) {
             AsyncImage(
@@ -973,6 +996,18 @@ private fun HomeScreen(
                 // scrim exists to make possible. Left at the default theme
                 // color the rest of the time, matching the plain background.
                 val iconTint = if (backgroundFile != null) Color.White else LocalContentColor.current
+                // #209 - "Sort" shows the centred game's letter and opens the
+                // jump-to-letter picker. Reached with Up from the carousel,
+                // like the + and gear next to it.
+                if (showSort) {
+                    HypdroidOutlinedButton(
+                        onClick = { showLetterPicker = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = iconTint),
+                    ) {
+                        Text("Sort  " + letterEntryFor(focusedGame?.name ?: ""))
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
                 HypdroidIconButton(onClick = onChooseFolder) {
                     Icon(Icons.Filled.Add, contentDescription = "Choose game folder", tint = iconTint)
                 }
@@ -1008,6 +1043,8 @@ private fun HomeScreen(
                         onPageChanged = onCarouselPageChanged,
                         onPlay = onPlay,
                         onOpenOptions = onOpenOptions,
+                        jumpRequest = jumpRequest,
+                        onJumpHandled = { jumpRequest = null },
                     )
                 }
             }
@@ -1040,6 +1077,9 @@ private fun GameCarousel(
     onPageChanged: (Int) -> Unit,
     onPlay: (Game) -> Unit,
     onOpenOptions: (Game) -> Unit,
+    // #209 - a page to jump to from the Sort picker, or null.
+    jumpRequest: Int? = null,
+    onJumpHandled: () -> Unit = {},
 ) {
     // #52 fix - restores whatever page was focused before navigating away
     // (e.g. to #31's Options screen and back), instead of always starting
@@ -1061,6 +1101,19 @@ private fun GameCarousel(
     // paging needs to be wired up explicitly, not left as a touch-only gap.
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    // #209 - carry out a Sort-picker jump, then hand focus straight back to
+    // the carousel so Left/Right/A/Down work from the game it landed on.
+    // Waits a frame first so the closing picker dialog doesn't take focus
+    // back after us.
+    LaunchedEffect(jumpRequest) {
+        val target = jumpRequest ?: return@LaunchedEffect
+        pagerState.scrollToPage(target.coerceIn(0, (games.size - 1).coerceAtLeast(0)))
+        withFrameNanos { }
+        withFrameNanos { }
+        runCatching { focusRequester.requestFocus() }
+        onJumpHandled()
+    }
 
     // #105 - card width derived from screen width instead of a fixed
     // 420.dp, same basis as #97's touch-button fix. The fraction
