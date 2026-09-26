@@ -627,8 +627,8 @@ private fun HypdroidApp(context: MainActivity) {
             // folder picker alone.
             instructions = "Recommended folder name: hypseus\n\n" +
                 "Create subfolders inside your game folder:\n" +
-                "- roms: Daphne-native ROM(s)\n" +
-                "- vldp: Daphne-native framefile folder(s)\n" +
+                "- roms: Daphne ROM(s)\n" +
+                "- vldp: Daphne framefile folder(s)\n" +
                 "- singe: fan-made games\n\n" +
                 "Unzipped Game Requirements:\n" +
                 "- Framework: required in singe folder",
