@@ -65,6 +65,7 @@ fun SettingsScreen(
     onOpenControllerConfig: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenTouchControls: () -> Unit,
+    onOpenExport: () -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -96,6 +97,8 @@ fun SettingsScreen(
                 // there's a natural home for future control-repositioning
                 // UI without needing to restructure this grid later.
                 Triple("Touch Controls", "On-screen overlay for gameplay", onOpenTouchControls),
+                // #211 - own page, room for more export cards later.
+                Triple("Export", "Create files for other frontends", onOpenExport),
             )
             items(cards) { (title, description, onClick) ->
                 SettingsCard(title = title, description = description, onClick = onClick)

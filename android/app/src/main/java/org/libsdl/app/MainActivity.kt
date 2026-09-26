@@ -223,7 +223,7 @@ class MainActivity : ComponentActivity() {
  * Returns null if the path can't be resolved or doesn't exist - caller
  * must treat that as "unsupported", not silently proceed with a broken path.
  */
-private fun resolveRealPath(treeUri: Uri): String? {
+internal fun resolveRealPath(treeUri: Uri): String? {
     val docId = try {
         DocumentsContract.getTreeDocumentId(treeUri)
     } catch (e: Exception) {
@@ -256,6 +256,7 @@ private sealed class Screen {
     object About : Screen()
     object ControllerConfig : Screen()
     object TouchControls : Screen()
+    object Export : Screen()
     data class GameOptionsFor(val gameName: String) : Screen()
     // #135 - pushed from GameOptionsFor's "Game Hack" card, backs to that
     // same game's options rather than all the way to Home.
@@ -275,7 +276,7 @@ private const val PREF_MEDIA_FOLDER_URI = "media_folder_uri"
 
 // Generalized over a pref key so the same save/load/clear logic covers both
 // the game folder (#36) and the media folder (#30) without duplicating it.
-private fun savePersistedFolderUri(context: Context, key: String, uri: Uri) {
+internal fun savePersistedFolderUri(context: Context, key: String, uri: Uri) {
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
         .putString(key, uri.toString())
@@ -289,7 +290,7 @@ private fun clearPersistedFolderUri(context: Context, key: String) {
         .apply()
 }
 
-private fun loadPersistedFolderUri(context: Context, key: String): Uri? {
+internal fun loadPersistedFolderUri(context: Context, key: String): Uri? {
     val stored = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .getString(key, null) ?: return null
     val uri = Uri.parse(stored)
@@ -613,6 +614,7 @@ private fun HypdroidApp(context: MainActivity) {
             onOpenControllerConfig = { currentScreen = Screen.ControllerConfig },
             onOpenAbout = { currentScreen = Screen.About },
             onOpenTouchControls = { currentScreen = Screen.TouchControls },
+            onOpenExport = { currentScreen = Screen.Export },
             onBack = { currentScreen = Screen.Home },
         )
         Screen.ManageGameFolder -> FolderManageScreen(
@@ -712,6 +714,11 @@ private fun HypdroidApp(context: MainActivity) {
         )
         Screen.About -> AboutScreen(
             context = context,
+            onBack = { currentScreen = Screen.Settings },
+        )
+        Screen.Export -> ExportScreen(
+            gameFolderChosen = gameFolderPath != null,
+            games = games,
             onBack = { currentScreen = Screen.Settings },
         )
         Screen.TouchControls -> TouchControlsScreen(
