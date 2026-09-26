@@ -97,6 +97,53 @@ class DptExportTest {
         assertTrue(plan.remove.isEmpty())
     }
 
+    // #217 - games are grouped by the pack folder their framefile is in.
+    private fun singe(name: String) = Game(name, GameCategory.SINGE_ZIPPED, "/home/singe/$name/$name.txt", "/home/singe/$name/$name.zip")
+    private fun packed(pack: String, name: String) =
+        Game(name, GameCategory.SINGE_ZIPPED, "/home/singe/$pack/$name.txt", "/home/singe/$pack/$pack.zip", name)
+    private fun daphne(name: String) = Game(name, GameCategory.DAPHNE_NATIVE, "/home/vldp/$name/$name.txt", "/home/roms/$name.zip")
+
+    private val mixed = listOf(
+        singe("Hero"),
+        daphne("disc1"),
+        packed("actionmax", "am1"),
+        packed("ActionMax", "am2"),
+        packed("videodriver", "vd1"),
+        packed("captainpower", "cp1"),
+        packed("otherpack", "op1"),
+    )
+
+    @Test
+    fun eachPackGoesToItsOwnSystem() {
+        assertEquals(listOf("am1", "am2"), systemDptGames(mixed, DptSystem.ACTION_MAX).map { it.name })
+        assertEquals(listOf("vd1"), systemDptGames(mixed, DptSystem.VIDEO_DRIVER).map { it.name })
+        assertEquals(listOf("cp1"), systemDptGames(mixed, DptSystem.CAPTAIN_POWER).map { it.name })
+    }
+
+    @Test
+    fun laserdiscSkipsTheThreePacksButKeepsOtherSingeGames() {
+        assertEquals(listOf("Hero", "op1"), laserdiscDptGames(mixed).map { it.name })
+    }
+
+    @Test
+    fun daphneGamesStayInDaphneOnly() {
+        assertEquals(listOf("disc1"), daphneDptGames(mixed).map { it.name })
+        assertEquals(null, dptSystemFor(daphne("actionmax")))
+    }
+
+    @Test
+    fun cardsNeverShareAGame() {
+        val groups = listOf(daphneDptGames(mixed), laserdiscDptGames(mixed)) +
+            DptSystem.values().map { systemDptGames(mixed, it) }
+        assertEquals(mixed.size, groups.sumOf { it.size })
+        assertEquals(mixed.map { it.name }.toSet(), groups.flatten().map { it.name }.toSet())
+    }
+
+    @Test
+    fun systemLabelsMatchTheFolderNotFoundMessages() {
+        assertEquals(listOf("actionmax", "videodriver", "cpower"), DptSystem.values().map { it.label })
+    }
+
     @Test
     fun resultMessageShowsCountsThenProblems() {
         assertEquals("Created 20, skipped 7, removed 2", dptResultMessage(DptExportResult(20, 7, 2, emptyList())))

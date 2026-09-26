@@ -3,15 +3,18 @@ package org.libsdl.app
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import java.io.File
 
 /**
  * #211 - "Create DPT Files": one `<game name>.dpt` per game, for frontends
  * (Daijishō, ES-DE) that list games from one file per game and launch each
  * by name through #116's `gamename` extra.
  *
- * Only two things happen: Daphne games' files go to the chosen Daphne
- * folder, every other game's to the chosen LaserDisc folder. A folder not
- * set or not found skips its games. Nothing is ever written to singe/.
+ * Daphne games' files go to the chosen Daphne folder, every other game's to
+ * the chosen LaserDisc folder. #217 - games from the actionmax, videodriver
+ * and captainpower packs go to their own chosen folders instead (the Export
+ * page's second card), never to LaserDisc. A folder not set or not found
+ * skips its games. Nothing is ever written to singe/.
  *
  * Same rules as the Windows launcher's TXT export:
  * - An existing `<game>.dpt` is skipped, never overwritten.
@@ -76,29 +79,72 @@ fun dptResultMessage(result: DptExportResult): String =
         .joinToString("\n")
 
 /**
- * Runs the export. [daphneFolder] and [laserdiscFolder] are the SAF tree
- * URIs picked on the Export page, null when not set. Written through the
- * tree URIs rather than File paths, since Handheld has no All Files Access.
+ * #217 - pack systems with their own folder on the Export page's second
+ * card. [label] names the folder in "... folder not found"; [packFolder] is
+ * the pack's folder name in singe/.
+ */
+enum class DptSystem(val label: String, val packFolder: String) {
+    ACTION_MAX("actionmax", "actionmax"),
+    VIDEO_DRIVER("videodriver", "videodriver"),
+    CAPTAIN_POWER("cpower", "captainpower"),
+}
+
+/** Which pack system a game belongs to, from the folder its framefile is in. */
+fun dptSystemFor(game: Game): DptSystem? {
+    if (game.category == GameCategory.DAPHNE_NATIVE) return null
+    val pack = File(game.framefilePath).parentFile?.name ?: return null
+    return DptSystem.values().firstOrNull { it.packFolder.equals(pack, ignoreCase = true) }
+}
+
+fun daphneDptGames(games: List<Game>): List<Game> =
+    games.filter { it.category == GameCategory.DAPHNE_NATIVE }
+
+fun laserdiscDptGames(games: List<Game>): List<Game> =
+    games.filter { it.category != GameCategory.DAPHNE_NATIVE && dptSystemFor(it) == null }
+
+fun systemDptGames(games: List<Game>, system: DptSystem): List<Game> =
+    games.filter { dptSystemFor(it) == system }
+
+/**
+ * The first card: Daphne and LaserDisc. The folders are the SAF tree URIs
+ * picked on the Export page, null when not set. Written through the tree
+ * URIs rather than File paths, since Handheld has no All Files Access.
  */
 fun exportDptFiles(
     context: Context,
     games: List<Game>,
     daphneFolder: Uri?,
     laserdiscFolder: Uri?,
-): DptExportResult {
+): DptExportResult = exportDptTargets(
+    context,
+    games,
+    listOf(
+        DptTarget("daphne", daphneFolder, daphneDptGames(games)),
+        DptTarget("laserdisc", laserdiscFolder, laserdiscDptGames(games)),
+    ),
+)
+
+/** #217 - the second card: one folder per [DptSystem]. */
+fun exportSystemDptFiles(context: Context, games: List<Game>, folders: Map<DptSystem, Uri?>): DptExportResult =
+    exportDptTargets(
+        context,
+        games,
+        DptSystem.values().map { DptTarget(it.label, folders[it], systemDptGames(games, it)) },
+    )
+
+private class DptTarget(val label: String, val folder: Uri?, val games: List<Game>)
+
+private fun exportDptTargets(context: Context, games: List<Game>, targets: List<DptTarget>): DptExportResult {
     val allNames = games.map { it.name }
-    val (daphne, laserdisc) = games.partition { it.category == GameCategory.DAPHNE_NATIVE }
     var created = 0
     var skipped = 0
     var removed = 0
     val problems = mutableListOf<String>()
 
-    for ((label, tree, folderGames) in listOf(
-        Triple("daphne", daphneFolder, daphne),
-        Triple("laserdisc", laserdiscFolder, laserdisc),
-    )) {
-        if (folderGames.isEmpty() && tree == null) continue
-        val folder = tree?.let { SafFolder.open(context, it) }
+    for (target in targets) {
+        val label = target.label
+        if (target.games.isEmpty() && target.folder == null) continue
+        val folder = target.folder?.let { SafFolder.open(context, it) }
         if (folder == null) {
             problems += "$label folder not found"
             continue
@@ -108,7 +154,7 @@ fun exportDptFiles(
             problems += "$label folder not found"
             continue
         }
-        val plan = planDptFolder(folderGames.map { it.name }, allNames, existing.mapValues { it.value.content })
+        val plan = planDptFolder(target.games.map { it.name }, allNames, existing.mapValues { it.value.content })
         skipped += plan.skipped
         var failed = false
         for (name in plan.create) {
