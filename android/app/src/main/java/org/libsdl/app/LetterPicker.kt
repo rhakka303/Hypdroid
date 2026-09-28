@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 
 /**
  * #209 - the "Sort" picker: "#" then A to Z in a compact grid. Choosing an
@@ -34,6 +35,10 @@ import androidx.compose.ui.unit.dp
  * focusable either, so the D-pad skips it). Opens with focus on the letter
  * of the game currently centred, so on a gamepad it's one press to confirm
  * or a few to move. Back/B or Cancel closes it without moving.
+ *
+ * #219 - on 1920x1080 handhelds Android's default dialog width came out too
+ * narrow for 9 letters a row, cutting off the last three columns. The dialog
+ * now sizes to its content instead (Material caps it at 560dp).
  */
 @Composable
 fun LetterPickerDialog(
@@ -45,6 +50,7 @@ fun LetterPickerDialog(
     val currentRequester = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text("Sort") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
